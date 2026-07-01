@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { db, save, uid, findUserByEmail, findUserById, listUsers } from "./db.mjs";
+import { db, save, uid, initDb, findUserByEmail, findUserById, listUsers } from "./db.mjs";
 import { hashPassword, verifyPassword, makeToken, verifyToken, genOtp, isValidEmail } from "./authcore.mjs";
 import { sendResetCode, mailerConfigured } from "./mailer.mjs";
 import { resolveChannel, sendMessage } from "./kick.mjs";
@@ -27,8 +27,8 @@ const PORT = Number(process.env.PORT) || 8787;
   }
 })();
 
-// --- seed the admin account (Cheftyz) from env on first run ---
-(() => {
+// --- seed / refresh the admin account (Cheftyz) from env ---
+async function seedAdmin() {
   const email = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD || "";
   if (!email || !password) {
@@ -47,14 +47,14 @@ const PORT = Number(process.env.PORT) || 8787;
       createdAt: Date.now(),
     };
     db().users.push(admin);
-    save();
+    await save();
     console.log(`[MB Chatters] Seeded admin account: ${email}`);
   } else if (!admin.isAdmin || admin.status !== "approved") {
     admin.isAdmin = true;
     admin.status = "approved";
-    save();
+    await save();
   }
-})();
+}
 
 const app = express();
 app.use(cors());
@@ -84,7 +84,7 @@ function adminOnly(req, res, next) {
 }
 
 // ---------------------------- auth ----------------------------
-app.post("/api/signup", (req, res) => {
+app.post("/api/signup", async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const password = String(req.body?.password || "");
   const displayName = String(req.body?.displayName || "").trim();
@@ -102,7 +102,7 @@ app.post("/api/signup", (req, res) => {
     createdAt: Date.now(),
   };
   db().users.push(user);
-  save();
+  await save();
   res.json({ ok: true, status: "pending" });
 });
 
@@ -134,7 +134,7 @@ app.post("/api/forgot", async (req, res) => {
     const code = genOtp();
     db().resets = db().resets.filter((r) => r.email !== email);
     db().resets.push({ email, code, expires: Date.now() + 15 * 60000 });
-    save();
+    await save();
     try {
       await sendResetCode(email, code);
     } catch (e) {
@@ -144,7 +144,7 @@ app.post("/api/forgot", async (req, res) => {
   res.json({ ok: true, emailed: mailerConfigured });
 });
 
-app.post("/api/reset", (req, res) => {
+app.post("/api/reset", async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const code = String(req.body?.code || "").trim();
   const password = String(req.body?.password || "");
@@ -156,7 +156,7 @@ app.post("/api/reset", (req, res) => {
   if (!user) return res.status(400).json({ error: "Invalid code." });
   user.passwordHash = hashPassword(password);
   db().resets = db().resets.filter((r) => r.email !== email);
-  save();
+  await save();
   res.json({ ok: true });
 });
 
@@ -165,14 +165,14 @@ app.get("/api/admin/users", auth, adminOnly, (_req, res) => {
   res.json({ users: listUsers().sort((a, b) => a.createdAt - b.createdAt) });
 });
 
-app.post("/api/admin/users/:id/status", auth, adminOnly, (req, res) => {
+app.post("/api/admin/users/:id/status", auth, adminOnly, async (req, res) => {
   const target = findUserById(req.params.id);
   const status = String(req.body?.status || "");
   if (!target) return res.status(404).json({ error: "user not found" });
   if (!["approved", "disabled", "pending"].includes(status)) return res.status(400).json({ error: "bad status" });
   if (target.isAdmin) return res.status(400).json({ error: "You can't change an admin's access." });
   target.status = status;
-  save();
+  await save();
   res.json({ ok: true, user: publicUser(target) });
 });
 
@@ -204,6 +204,15 @@ if (fs.existsSync(DIST)) {
   console.warn("[MB Chatters] dist/ not found — run `npm run build` to serve the app. API still works.");
 }
 
-app.listen(PORT, () => {
-  console.log(`MB Chatters server on http://localhost:${PORT}  (mailer: ${mailerConfigured ? "SMTP" : "console"})`);
+async function main() {
+  await initDb();
+  await seedAdmin();
+  app.listen(PORT, () => {
+    console.log(`MB Chatters server on http://localhost:${PORT}  (mailer: ${mailerConfigured ? "SMTP" : "console"})`);
+  });
+}
+
+main().catch((err) => {
+  console.error("[MB Chatters] failed to start:", err);
+  process.exit(1);
 });
