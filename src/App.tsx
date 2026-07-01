@@ -1,0 +1,62 @@
+import { useEffect, useState } from "react";
+import { useStore } from "./lib/store";
+import { chat } from "./lib/chat";
+import { TopBar } from "./components/TopBar";
+import { Sidebar } from "./components/Sidebar";
+import { ChatArea } from "./components/ChatArea";
+import { Composer } from "./components/Composer";
+import { Toasts } from "./components/Toasts";
+import { AddAccountDialog, JoinChannelDialog, PhrasesDialog } from "./components/dialogs";
+
+type Dialog = null | "account" | "channel" | "phrases";
+
+export default function App() {
+  const [dialog, setDialog] = useState<Dialog>(null);
+
+  const accounts = useStore((s) => s.accounts);
+  const channels = useStore((s) => s.channels);
+  const autoEnabled = useStore((s) => s.autoEnabled);
+  const autoInterval = useStore((s) => s.autoInterval);
+  const tickScheduled = useStore((s) => s.tickScheduled);
+  const runAuto = useStore((s) => s.runAuto);
+
+  // reconnect persisted accounts/channels on load and whenever the set changes
+  useEffect(() => {
+    chat.sync(accounts, channels);
+  }, [accounts, channels]);
+
+  // fire due scheduled messages
+  useEffect(() => {
+    const t = setInterval(() => tickScheduled(), 250);
+    return () => clearInterval(t);
+  }, [tickScheduled]);
+
+  // auto-send loop
+  useEffect(() => {
+    if (!autoEnabled) return;
+    const t = setInterval(() => runAuto(), Math.max(1, autoInterval) * 1000);
+    return () => clearInterval(t);
+  }, [autoEnabled, autoInterval, runAuto]);
+
+  return (
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg text-slate-200">
+      <TopBar />
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar
+          onAddAccount={() => setDialog("account")}
+          onJoinChannel={() => setDialog("channel")}
+        />
+        <main className="flex flex-1 flex-col overflow-hidden">
+          <ChatArea />
+          <Composer onEditPhrases={() => setDialog("phrases")} />
+        </main>
+      </div>
+
+      {dialog === "account" && <AddAccountDialog onClose={() => setDialog(null)} />}
+      {dialog === "channel" && <JoinChannelDialog onClose={() => setDialog(null)} />}
+      {dialog === "phrases" && <PhrasesDialog onClose={() => setDialog(null)} />}
+
+      <Toasts />
+    </div>
+  );
+}
