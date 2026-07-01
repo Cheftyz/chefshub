@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { db, save, uid, initDb, findUserByEmail, findUserById, listUsers } from "./db.mjs";
+import { db, save, uid, initDb, storageKind, findUserByEmail, findUserById, listUsers } from "./db.mjs";
 import { hashPassword, verifyPassword, makeToken, verifyToken, genOtp, isValidEmail } from "./authcore.mjs";
 import { sendResetCode, mailerConfigured } from "./mailer.mjs";
 import { resolveChannel, sendMessage } from "./kick.mjs";
@@ -191,7 +191,9 @@ app.post("/kick/send", async (req, res) => {
   res.status(result.ok ? 200 : 502).json(result);
 });
 
-app.get("/api/health", (_req, res) => res.json({ ok: true, mailer: mailerConfigured ? "smtp" : "console" }));
+app.get("/api/health", (_req, res) =>
+  res.json({ ok: true, storage: storageKind(), mailer: mailerConfigured ? "smtp" : "console" })
+);
 
 // ---------------------------- static frontend ----------------------------
 if (fs.existsSync(DIST)) {

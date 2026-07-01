@@ -67,6 +67,12 @@ export function db() {
   return cache;
 }
 
+/** "postgres" (persistent), "file" (local JSON), or "uninitialized" */
+export function storageKind() {
+  if (!cache) return "uninitialized";
+  return usePg ? "postgres" : "file";
+}
+
 export async function save() {
   if (usePg) {
     await pool.query(
