@@ -130,6 +130,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+server.on("error", (e) => {
+  if (e.code === "EADDRINUSE") {
+    console.log(
+      `Port ${PORT} is already in use — a ChefsHub proxy is probably already running. You can close this window.`
+    );
+    process.exit(0);
+  }
+  console.error(e);
+  process.exit(1);
+});
+
 server.listen(PORT, () => {
   console.log(`ChefsHub Kick proxy listening on http://localhost:${PORT}`);
 });
