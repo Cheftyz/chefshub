@@ -1,9 +1,9 @@
-// ChefsHub Kick proxy.
+// MB Chatters Kick proxy.
 //
 // Browsers cannot call kick.com / api.kick.com directly: Cloudflare blocks the
 // requests and no CORS headers are returned. This tiny dependency-free proxy
 // runs locally, presents browser-like headers, and exposes a CORS-friendly API
-// the ChefsHub web app can use to (1) resolve a channel slug to its chatroom /
+// the MB Chatters web app can use to (1) resolve a channel slug to its chatroom /
 // broadcaster ids and (2) send chat messages with an account's bearer token.
 //
 //   node server/kick-proxy.mjs         # listens on http://localhost:8787
@@ -133,7 +133,7 @@ const server = http.createServer(async (req, res) => {
 server.on("error", (e) => {
   if (e.code === "EADDRINUSE") {
     console.log(
-      `Port ${PORT} is already in use — a ChefsHub proxy is probably already running. You can close this window.`
+      `Port ${PORT} is already in use — a MB Chatters proxy is probably already running. You can close this window.`
     );
     process.exit(0);
   }
@@ -142,5 +142,5 @@ server.on("error", (e) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`ChefsHub Kick proxy listening on http://localhost:${PORT}`);
+  console.log(`MB Chatters Kick proxy listening on http://localhost:${PORT}`);
 });

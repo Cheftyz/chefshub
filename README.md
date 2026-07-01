@@ -1,74 +1,76 @@
-# ChefsHub
+# MB Chatters
 
-A multi-account **Twitch + Kick chat client** — rebuild of the "ChatTime" app. Manage
-several accounts across both platforms, join channels, chat, and queue quick phrases with
-per-phrase timers or an auto-send loop.
+A multi-account **Twitch + Kick chat client** with **user accounts and admin-controlled
+access**. Manage accounts across both platforms, join channels, chat, and queue quick
+phrases with per-phrase timers or an auto-send loop — behind a login where an admin
+(Cheftyz) approves who can use the app.
 
-Built with **Vite + React + TypeScript + Tailwind + Zustand**. Accounts, tokens, channels
-and phrases are stored locally in your browser.
+Stack: **React + TypeScript + Vite + Tailwind** frontend, a small **Node/Express** backend
+(JSON storage, no external database) that serves the app, handles accounts, and proxies Kick.
 
-## Features
+## Accounts & access
 
-- **Platform tabs** — a **Twitch** tab and a **Kick** tab at the top. Each tab is its own
-  screen: switch to a tab to see only that platform's accounts and channels, and "Add
-  account" / "Join channel" default to that platform.
-- **Twitch + Kick accounts** — add any number of logins on either platform. Each account
-  and channel is tagged with a platform badge. The green/red dot shows live status.
-- **Channels** — join any Twitch or Kick channel by name; live chat renders with colored
-  usernames.
-- **Composer** — send from the selected account (automatically filtered to the active
-  channel's platform), or hit the clock button to **schedule** a message after a delay
-  (live countdown you can cancel).
-- **Quick phrases** — one-click phrases, each with its own delay. Edit them in the
-  **Quick phrases** dialog.
-- **Auto mode** — every _N_ seconds, send a random phrase from a random visible account on
-  the active channel's platform.
+- **Sign up** with an email + password. New accounts start as **pending**.
+- **Admin approval** — the admin opens the **Admin** tab and turns each user's access
+  **on/off** (approve, or disable to instantly revoke). Pending/disabled users see a gate
+  screen and can't reach the app.
+- **Forgot password** — enter your email to get a **one-time code**; enter the code + a new
+  password to reset. The code is emailed if SMTP is configured, otherwise printed to the
+  server console (so it works out of the box for testing).
+- The admin account (**Cheftyz**) is seeded from environment variables and can't be
+  disabled or demoted from the panel.
+
+## Run it locally
+
+```bash
+cp .env.example .env      # then set ADMIN_EMAIL / ADMIN_PASSWORD
+npm install
+npm run build
+npm run server            # serves the whole app at http://localhost:8787
+```
+
+Or just double-click **`Start MB Chatters.bat`** (Windows) — it installs, builds, starts the
+server, and opens the browser.
+
+For development with hot-reload:
+
+```bash
+npm run dev               # vite on :5173 + API on :8787 (vite proxies /api and /kick)
+```
+
+## Put it online for all users
+
+The account system needs a **Node host** (a static site like GitHub Pages can't run the
+backend). Easiest path — **Render** (free tier):
+
+1. Push this repo to GitHub.
+2. On [render.com](https://render.com): **New → Blueprint**, pick the repo (it reads
+   `render.yaml`).
+3. After it deploys, set **ADMIN_EMAIL** and **ADMIN_PASSWORD** (and optional `SMTP_*` for
+   real reset emails) in the service's **Environment** settings.
+
+A `Dockerfile` is also included for any container host (Railway, Fly.io, etc.).
+
+### Email for password resets (optional)
+
+Set these env vars to email reset codes instead of logging them (example = Gmail App
+Password): `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER`, `SMTP_PASS`,
+`MAIL_FROM`.
 
 ## How each platform connects
 
 | | Read chat | Send / lookup |
 |---|---|---|
-| **Twitch** | Twitch IRC over WebSocket (in-browser) | Twitch IRC (in-browser) |
-| **Kick** | Kick's public Pusher socket (in-browser) | **Local proxy** → Kick API |
+| **Twitch** | Twitch IRC over WebSocket (browser) | Twitch IRC (browser) |
+| **Kick** | Kick's public Pusher socket (browser) | via the MB Chatters server (Kick blocks browsers) |
 
-Twitch works entirely client-side. **Kick is different**: `kick.com` / `api.kick.com` sit
-behind Cloudflare and send no CORS headers, so a browser cannot call them directly. Reading
-Kick chat works in-browser via Pusher, but resolving a channel and **sending** messages must
-go through the bundled local proxy (`server/kick-proxy.mjs`).
-
-## Getting tokens
-
-- **Twitch** — Add account → Twitch → **Open twitchtokengenerator.com**, generate a token
-  with `chat:read` + `chat:edit` scopes, paste your username + `oauth:...` token.
-- **Kick** — Add account → Kick. On kick.com open DevTools → Network, send a chat message,
-  and copy the `Authorization: Bearer` token from the request. Paste your username + token.
-
-Tokens never leave your browser except when the proxy forwards a Kick send on your behalf.
-
-## Run
-
-```bash
-npm install
-
-# Twitch only:
-npm run dev            # http://localhost:5173
-
-# Twitch + Kick (web app + Kick proxy together):
-npm run start          # web on :5173, proxy on :8787
-
-# proxy alone (if you prefer separate terminals):
-npm run proxy          # http://localhost:8787
-```
-
-The web app talks to the proxy at `http://localhost:8787` by default. Override it with
-`localStorage.setItem('chefshub.proxy', 'http://host:port')`.
+Twitch runs in the browser. Kick's own API is Cloudflare-guarded with no CORS, so Kick
+channel lookup and sending go through the MB Chatters server. Note Kick's API can also block
+cloud/datacenter IPs, so Kick sending may fail from some hosts even with a valid token.
 
 ## Notes
 
-- Neither Twitch nor Kick echoes your own messages back reliably, so sent messages are shown
-  locally as you send them; echoes seen by your other connected accounts are de-duplicated.
-- Kick sending depends on a valid token and your network reaching Kick — Kick's API is
-  actively Cloudflare-guarded and behavior can change. The proxy tries the official
-  `api.kick.com/public/v1/chat` endpoint first, then the legacy `v2` endpoint, and reports
-  the error if both fail.
+- Accounts/passwords live in `server/data/db.json` (gitignored); passwords are scrypt-hashed.
+- Neither platform reliably echoes your own messages, so sent messages show locally and
+  echoes from your other connected accounts are de-duplicated.
 - Use responsibly and within each platform's Terms of Service and each channel's rules.

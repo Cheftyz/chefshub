@@ -13,12 +13,13 @@ import type { ConnState } from "./types";
 const PUSHER_APP_KEY = "32cbd69e4b950bf97679";
 const PUSHER_URL = `wss://ws-us2.pusher.com/app/${PUSHER_APP_KEY}?protocol=7&client=js&version=8.4.0&flash=false`;
 
-const DEFAULT_PROXY = "http://localhost:8787";
 export function proxyBase(): string {
+  // same-origin by default (served by the MB Chatters server; proxied by vite in dev).
+  // Can be overridden to point at a standalone proxy if desired.
   try {
-    return localStorage.getItem("chefshub.proxy") || DEFAULT_PROXY;
+    return localStorage.getItem("chefshub.proxy") || "";
   } catch {
-    return DEFAULT_PROXY;
+    return "";
   }
 }
 

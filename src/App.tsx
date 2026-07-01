@@ -6,12 +6,15 @@ import { Sidebar } from "./components/Sidebar";
 import { ChatArea } from "./components/ChatArea";
 import { Composer } from "./components/Composer";
 import { Toasts } from "./components/Toasts";
+import { AuthGate } from "./components/AuthGate";
+import { AdminPanel } from "./components/AdminPanel";
 import { AddAccountDialog, JoinChannelDialog, PhrasesDialog } from "./components/dialogs";
 
 type Dialog = null | "account" | "channel" | "phrases";
 
 export default function App() {
   const [dialog, setDialog] = useState<Dialog>(null);
+  const [screen, setScreen] = useState<"app" | "admin">("app");
 
   const accounts = useStore((s) => s.accounts);
   const channels = useStore((s) => s.channels);
@@ -39,18 +42,23 @@ export default function App() {
   }, [autoEnabled, autoInterval, runAuto]);
 
   return (
+    <AuthGate>
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg text-slate-200">
-      <TopBar />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          onAddAccount={() => setDialog("account")}
-          onJoinChannel={() => setDialog("channel")}
-        />
-        <main className="flex flex-1 flex-col overflow-hidden">
-          <ChatArea />
-          <Composer onEditPhrases={() => setDialog("phrases")} />
-        </main>
-      </div>
+      <TopBar screen={screen} onScreen={setScreen} />
+      {screen === "admin" ? (
+        <AdminPanel />
+      ) : (
+        <div className="flex flex-1 overflow-hidden">
+          <Sidebar
+            onAddAccount={() => setDialog("account")}
+            onJoinChannel={() => setDialog("channel")}
+          />
+          <main className="flex flex-1 flex-col overflow-hidden">
+            <ChatArea />
+            <Composer onEditPhrases={() => setDialog("phrases")} />
+          </main>
+        </div>
+      )}
 
       {dialog === "account" && <AddAccountDialog onClose={() => setDialog(null)} />}
       {dialog === "channel" && <JoinChannelDialog onClose={() => setDialog(null)} />}
@@ -58,5 +66,6 @@ export default function App() {
 
       <Toasts />
     </div>
+    </AuthGate>
   );
 }

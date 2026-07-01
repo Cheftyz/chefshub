@@ -1,0 +1,43 @@
+# One-click deploy to Render (https://render.com) so MB Chatters is live for all
+# users. Push this repo to GitHub, then in Render: New → Blueprint → pick the repo.
+# After it deploys, set ADMIN_EMAIL / ADMIN_PASSWORD (and optional SMTP_*) in the
+# service's Environment settings.
+#
+# NOTE on data: the free plan has no persistent disk, so the accounts file
+# (server/data/db.json) resets whenever the service restarts/redeploys. The admin
+# is always re-seeded from ADMIN_EMAIL/ADMIN_PASSWORD, but approved users may need
+# re-approving after a restart. For permanent storage, upgrade the plan and add a
+# disk mounted at /app/server/data (uncomment below), or ask to switch to a
+# hosted database.
+services:
+  - type: web
+    name: mb-chatters
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: node server/server.mjs
+    envVars:
+      - key: PORT
+        value: 8787
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        value: Cheftyz
+      # optional email for password-reset codes:
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+    # For persistent accounts (paid plan required), uncomment:
+    # disk:
+    #   name: mb-chatters-data
+    #   mountPath: /app/server/data
+    #   sizeGB: 1

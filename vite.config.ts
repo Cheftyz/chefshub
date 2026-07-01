@@ -7,5 +7,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
+    // in dev, forward API + Kick calls to the backend server
+    proxy: {
+      "/api": "http://localhost:8787",
+      "/kick": "http://localhost:8787",
+    },
   },
 });
