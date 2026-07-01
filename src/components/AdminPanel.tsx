@@ -7,8 +7,14 @@ import {
   adminCreateUser,
   adminUpdateUser,
   adminDeleteUser,
+  adminListBots,
+  adminAddBot,
+  adminDeleteBot,
+  type AdminBot,
 } from "../lib/admin";
 import { Modal } from "./Modal";
+import { PLATFORMS, PlatformBadge } from "./platform";
+import type { Platform } from "../lib/types";
 import { IcSpinner, IcPlus, IcEdit, IcTrash } from "./Icons";
 
 const STATUS_STYLE: Record<string, string> = {
@@ -24,6 +30,107 @@ const btnPrimary =
   "flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed";
 
 type Editing = { mode: "create" } | { mode: "edit"; user: User } | null;
+
+function BotManager({ userId }: { userId: string }) {
+  const [bots, setBots] = useState<AdminBot[] | null>(null);
+  const [platform, setPlatform] = useState<Platform>("twitch");
+  const [username, setUsername] = useState("");
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => setBots(await adminListBots(userId));
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  const add = async () => {
+    if (!username.trim() || !token.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    const r = await adminAddBot(userId, { platform, username, token });
+    setBusy(false);
+    if (r.ok) {
+      setUsername("");
+      setToken("");
+      await load();
+    } else setError(r.error || "Couldn't add bot.");
+  };
+
+  const remove = async (botId: string) => {
+    await adminDeleteBot(userId, botId);
+    await load();
+  };
+
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <label className={label}>Bots on this account</label>
+      <p className="mb-2 text-[12px] text-muted">The Twitch/Kick accounts this user sends messages from.</p>
+
+      <div className="mb-3 space-y-1.5">
+        {bots === null ? (
+          <div className="flex items-center gap-2 py-2 text-[13px] text-muted">
+            <IcSpinner width={14} height={14} /> Loading…
+          </div>
+        ) : bots.length === 0 ? (
+          <p className="py-1 text-[13px] italic text-muted/70">No bots yet.</p>
+        ) : (
+          bots.map((b) => (
+            <div key={b.id} className="flex items-center gap-2 rounded-lg border border-line bg-bg-soft px-3 py-2">
+              <PlatformBadge platform={b.platform} />
+              <span className="flex-1 truncate text-sm text-slate-200">{b.username}</span>
+              <button
+                onClick={() => remove(b.id)}
+                title="Delete bot"
+                className="rounded-md p-1 text-muted hover:bg-white/5 hover:text-red-400"
+              >
+                <IcTrash width={14} height={14} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="rounded-lg border border-line bg-bg-soft/50 p-3">
+        <div className="mb-2 flex gap-2">
+          {(Object.keys(PLATFORMS) as Platform[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPlatform(p)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-[12px] font-medium ${
+                platform === p ? "border-brand/70 bg-brand/10 text-slate-100" : "border-line text-muted"
+              }`}
+            >
+              <PlatformBadge platform={p} /> {PLATFORMS[p].label}
+            </button>
+          ))}
+        </div>
+        <input
+          className={`${input} mb-2`}
+          placeholder="bot username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
+        <input
+          className={`${input} mb-2 font-mono`}
+          placeholder={platform === "kick" ? "bearer token" : "oauth:token"}
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+        {error && <p className="mb-2 text-[12px] text-red-400">{error}</p>}
+        <button
+          onClick={add}
+          disabled={busy || !username.trim() || !token.trim()}
+          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-brand/90 disabled:opacity-40"
+        >
+          {busy ? <IcSpinner width={13} height={13} /> : <IcPlus width={13} height={13} />} Add bot
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function UserDialog({ editing, onClose, onSaved }: { editing: Editing; onClose: () => void; onSaved: () => void }) {
   const isEdit = editing?.mode === "edit";
@@ -109,6 +216,8 @@ function UserDialog({ editing, onClose, onSaved }: { editing: Editing; onClose: 
       )}
 
       {error && <p className="mt-3 text-[13px] text-red-400">{error}</p>}
+
+      {isEdit && existing && <BotManager userId={existing.id} />}
     </Modal>
   );
 }

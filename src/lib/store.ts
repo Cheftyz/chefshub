@@ -4,6 +4,7 @@ import type { Account, ChatMessage, Channel, ConnState, Phrase, Platform, Schedu
 import { channelId } from "./types";
 import { chat } from "./chat";
 import { resolveKickChannel } from "./kick";
+import { listMyBots, addMyBot, updateMyBot, deleteMyBot } from "./bots";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -42,10 +43,12 @@ interface State {
   // navigation
   setView: (platform: Platform) => void;
 
-  // accounts
-  addAccount: (platform: Platform, username: string, token: string) => void;
-  removeAccount: (id: string) => void;
-  toggleVisible: (id: string) => void;
+  // accounts ("bots") — stored on the server per user
+  loadBots: () => Promise<void>;
+  clearBots: () => void;
+  addAccount: (platform: Platform, username: string, token: string) => Promise<{ ok: boolean; error?: string }>;
+  removeAccount: (id: string) => Promise<void>;
+  toggleVisible: (id: string) => Promise<void>;
   setActiveAccount: (id: string) => void;
 
   // channels
@@ -118,19 +121,35 @@ export const useStore = create<State>()(
         });
       },
 
-      addAccount: (platform, username, token) => {
+      loadBots: async () => {
+        const bots = await listMyBots();
+        set((s) => ({
+          accounts: bots,
+          activeAccountId: bots.find((b) => b.id === s.activeAccountId)?.id ?? bots[0]?.id ?? null,
+        }));
+        for (const b of bots) if (b.platform === "kick") get().setConnState(b.id, b.token ? "open" : "idle");
+        chat.sync(get().accounts, get().channels);
+      },
+      clearBots: () => {
+        set({ accounts: [], activeAccountId: null });
+        chat.sync([], get().channels);
+      },
+      addAccount: async (platform, username, token) => {
         const clean = username.trim().toLowerCase();
-        if (!clean) return;
-        const acc: Account = { id: uid(), platform, username: clean, token: token.trim(), visible: true };
+        if (!clean || !token.trim()) return { ok: false, error: "Username and token are required." };
+        const r = await addMyBot({ platform, username: clean, token: token.trim() });
+        if (!r.ok || !r.bot) return { ok: false, error: r.error || "Couldn't add the bot." };
+        const acc = r.bot;
         set((s) => ({
           accounts: [...s.accounts, acc],
           activeAccountId: s.activeAccountId ?? acc.id,
         }));
-        // kick accounts have no socket of their own — mark ready if a token is present
         if (platform === "kick") get().setConnState(acc.id, acc.token ? "open" : "idle");
         chat.sync(get().accounts, get().channels);
+        return { ok: true };
       },
-      removeAccount: (id) => {
+      removeAccount: async (id) => {
+        await deleteMyBot(id);
         set((s) => {
           const accounts = s.accounts.filter((a) => a.id !== id);
           return {
@@ -140,11 +159,14 @@ export const useStore = create<State>()(
         });
         chat.sync(get().accounts, get().channels);
       },
-      toggleVisible: (id) => {
+      toggleVisible: async (id) => {
+        const current = get().accounts.find((a) => a.id === id);
+        const next = !(current?.visible ?? true);
         set((s) => ({
-          accounts: s.accounts.map((a) => (a.id === id ? { ...a, visible: !a.visible } : a)),
+          accounts: s.accounts.map((a) => (a.id === id ? { ...a, visible: next } : a)),
         }));
         chat.sync(get().accounts, get().channels);
+        await updateMyBot(id, { visible: next });
       },
       setActiveAccount: (id) => set({ activeAccountId: id }),
 
@@ -314,7 +336,7 @@ export const useStore = create<State>()(
       migrate: (persisted, version) => (version < 1 ? (undefined as unknown as State) : (persisted as State)),
       partialize: (s) => ({
         view: s.view,
-        accounts: s.accounts,
+        // accounts (bots) are NOT persisted locally — they live on the server
         activeAccountId: s.activeAccountId,
         channels: s.channels,
         activeChannelId: s.activeChannelId,

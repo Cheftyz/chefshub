@@ -58,3 +58,35 @@ export async function adminDeleteUser(id: string): Promise<{ ok: boolean; error?
   });
   return r.json().catch(() => ({ ok: false }));
 }
+
+// ---- a user's bots (Twitch/Kick sending accounts), tokens hidden from admin ----
+export interface AdminBot {
+  id: string;
+  platform: "twitch" | "kick";
+  username: string;
+  visible: boolean;
+}
+
+export async function adminListBots(userId: string): Promise<AdminBot[]> {
+  const r = await fetch(`/api/admin/users/${userId}/bots`, { headers: { authorization: `Bearer ${token()}` } });
+  const d = await r.json().catch(() => ({}));
+  return (d.bots as AdminBot[]) || [];
+}
+export async function adminAddBot(
+  userId: string,
+  bot: { platform: string; username: string; token: string }
+): Promise<{ ok: boolean; error?: string }> {
+  const r = await fetch(`/api/admin/users/${userId}/bots`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token()}` },
+    body: JSON.stringify(bot),
+  });
+  return r.json().catch(() => ({ ok: false }));
+}
+export async function adminDeleteBot(userId: string, botId: string): Promise<{ ok: boolean }> {
+  const r = await fetch(`/api/admin/users/${userId}/bots/${botId}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token()}` },
+  });
+  return r.json().catch(() => ({ ok: false }));
+}

@@ -26,12 +26,21 @@ export function AddAccountDialog({ onClose }: { onClose: () => void }) {
   const platform = useStore((s) => s.view);
   const [username, setUsername] = useState("");
   const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const submit = () => {
-    if (!username.trim() || !token.trim()) return;
-    addAccount(platform, username, token);
-    toast(`Added ${username.trim().toLowerCase()}`);
-    onClose();
+  const submit = async () => {
+    if (!username.trim() || !token.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    const r = await addAccount(platform, username, token);
+    setBusy(false);
+    if (r.ok) {
+      toast(`Added ${username.trim().toLowerCase()}`);
+      onClose();
+    } else {
+      setError(r.error || "Couldn't add the bot.");
+    }
   };
 
   const isKick = platform === "kick";
@@ -41,12 +50,13 @@ export function AddAccountDialog({ onClose }: { onClose: () => void }) {
       title={`Add ${PLATFORMS[platform].label} account`}
       subtitle={
         isKick
-          ? "Paste your Kick bearer token. It's used by the local proxy to send messages and is stored privately in your browser."
-          : "Generate a chat OAuth token, then paste it here. The token (with chat:read + chat:edit scopes) is stored privately in your browser."
+          ? "Paste your Kick bearer token. It's stored on your account and used to send messages."
+          : "Generate a chat OAuth token (chat:read + chat:edit) and paste it here. It's stored on your account."
       }
       onClose={onClose}
       footer={
-        <button className={btnPrimary} disabled={!username.trim() || !token.trim()} onClick={submit}>
+        <button className={btnPrimary} disabled={!username.trim() || !token.trim() || busy} onClick={submit}>
+          {busy && <IcSpinner width={15} height={15} />}
           Add account
         </button>
       }
@@ -86,6 +96,7 @@ export function AddAccountDialog({ onClose }: { onClose: () => void }) {
         onChange={(e) => setToken(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && submit()}
       />
+      {error && <p className="mt-3 text-[13px] text-red-400">{error}</p>}
     </Modal>
   );
 }

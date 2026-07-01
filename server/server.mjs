@@ -67,7 +67,23 @@ const publicUser = (u) => ({
   status: u.status,
   isAdmin: !!u.isAdmin,
   createdAt: u.createdAt,
+  botCount: Array.isArray(u.bots) ? u.bots.length : 0,
 });
+
+// "bots" = the Twitch/Kick sending accounts a user has.
+function ensureBots(u) {
+  if (!Array.isArray(u.bots)) u.bots = [];
+  return u.bots;
+}
+const ownBot = (b) => ({ id: b.id, platform: b.platform, username: b.username, token: b.token, visible: b.visible !== false });
+const adminBot = (b) => ({ id: b.id, platform: b.platform, username: b.username, visible: b.visible !== false }); // no token
+function makeBot(body) {
+  const platform = body?.platform === "kick" ? "kick" : "twitch";
+  const username = String(body?.username || "").trim().toLowerCase();
+  const token = String(body?.token || "").trim();
+  if (!username || !token) return { error: "Username and token are both required." };
+  return { bot: { id: uid(), platform, username, token, visible: true } };
+}
 
 function auth(req, res, next) {
   const header = req.headers.authorization || "";
@@ -231,6 +247,55 @@ app.delete("/api/admin/users/:id", auth, adminOnly, async (req, res) => {
   if (!target) return res.status(404).json({ error: "user not found" });
   if (target.isAdmin) return res.status(400).json({ error: "You can't delete an admin account." });
   db().users = db().users.filter((u) => u.id !== target.id);
+  await save();
+  res.json({ ok: true });
+});
+
+// -------------------- bots: a user's own (with tokens) --------------------
+app.get("/api/me/bots", auth, (req, res) => {
+  res.json({ bots: ensureBots(req.user).map(ownBot) });
+});
+app.post("/api/me/bots", auth, async (req, res) => {
+  const { bot, error } = makeBot(req.body);
+  if (error) return res.status(400).json({ error });
+  ensureBots(req.user).push(bot);
+  await save();
+  res.json({ ok: true, bot: ownBot(bot) });
+});
+app.post("/api/me/bots/:botId", auth, async (req, res) => {
+  const bot = ensureBots(req.user).find((b) => b.id === req.params.botId);
+  if (!bot) return res.status(404).json({ error: "bot not found" });
+  if (req.body?.visible !== undefined) bot.visible = !!req.body.visible;
+  if (req.body?.username) bot.username = String(req.body.username).trim().toLowerCase();
+  if (req.body?.token) bot.token = String(req.body.token).trim();
+  await save();
+  res.json({ ok: true, bot: ownBot(bot) });
+});
+app.delete("/api/me/bots/:botId", auth, async (req, res) => {
+  req.user.bots = ensureBots(req.user).filter((b) => b.id !== req.params.botId);
+  await save();
+  res.json({ ok: true });
+});
+
+// -------------------- bots: admin managing any user's --------------------
+app.get("/api/admin/users/:id/bots", auth, adminOnly, (req, res) => {
+  const u = findUserById(req.params.id);
+  if (!u) return res.status(404).json({ error: "user not found" });
+  res.json({ bots: ensureBots(u).map(adminBot) });
+});
+app.post("/api/admin/users/:id/bots", auth, adminOnly, async (req, res) => {
+  const u = findUserById(req.params.id);
+  if (!u) return res.status(404).json({ error: "user not found" });
+  const { bot, error } = makeBot(req.body);
+  if (error) return res.status(400).json({ error });
+  ensureBots(u).push(bot);
+  await save();
+  res.json({ ok: true, bot: adminBot(bot) });
+});
+app.delete("/api/admin/users/:id/bots/:botId", auth, adminOnly, async (req, res) => {
+  const u = findUserById(req.params.id);
+  if (!u) return res.status(404).json({ error: "user not found" });
+  u.bots = ensureBots(u).filter((b) => b.id !== req.params.botId);
   await save();
   res.json({ ok: true });
 });

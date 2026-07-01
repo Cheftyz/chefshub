@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "./lib/store";
+import { useAuth } from "./lib/auth";
 import { chat } from "./lib/chat";
 import { TopBar } from "./components/TopBar";
 import { Sidebar } from "./components/Sidebar";
@@ -22,8 +23,17 @@ export default function App() {
   const autoInterval = useStore((s) => s.autoInterval);
   const tickScheduled = useStore((s) => s.tickScheduled);
   const runAuto = useStore((s) => s.runAuto);
+  const loadBots = useStore((s) => s.loadBots);
+  const clearBots = useStore((s) => s.clearBots);
 
-  // reconnect persisted accounts/channels on load and whenever the set changes
+  // load this user's bots from the server once they're signed in
+  const userId = useAuth((s) => s.user?.id ?? null);
+  useEffect(() => {
+    if (userId) loadBots();
+    else clearBots();
+  }, [userId, loadBots, clearBots]);
+
+  // reconnect accounts/channels whenever the set changes
   useEffect(() => {
     chat.sync(accounts, channels);
   }, [accounts, channels]);
