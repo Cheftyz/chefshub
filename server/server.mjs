@@ -176,6 +176,65 @@ app.post("/api/admin/users/:id/status", auth, adminOnly, async (req, res) => {
   res.json({ ok: true, user: publicUser(target) });
 });
 
+// create a user directly (admin) — approved by default
+app.post("/api/admin/users", auth, adminOnly, async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const password = String(req.body?.password || "");
+  const displayName = String(req.body?.displayName || "").trim();
+  const status = ["approved", "pending", "disabled"].includes(req.body?.status) ? req.body.status : "approved";
+  if (!isValidEmail(email)) return res.status(400).json({ error: "Enter a valid email address." });
+  if (password.length < 4) return res.status(400).json({ error: "Password must be at least 4 characters." });
+  if (findUserByEmail(email)) return res.status(409).json({ error: "An account with that email already exists." });
+  const user = {
+    id: uid(),
+    email,
+    displayName: displayName || email.split("@")[0],
+    passwordHash: hashPassword(password),
+    status,
+    isAdmin: false,
+    createdAt: Date.now(),
+  };
+  db().users.push(user);
+  await save();
+  res.json({ ok: true, user: publicUser(user) });
+});
+
+// edit a user (admin) — any of displayName / email / password / status
+app.post("/api/admin/users/:id", auth, adminOnly, async (req, res) => {
+  const target = findUserById(req.params.id);
+  if (!target) return res.status(404).json({ error: "user not found" });
+  const { displayName, email, password, status } = req.body || {};
+  if (displayName !== undefined && String(displayName).trim()) target.displayName = String(displayName).trim();
+  if (email !== undefined) {
+    const e = String(email).trim().toLowerCase();
+    if (!isValidEmail(e)) return res.status(400).json({ error: "Enter a valid email address." });
+    const other = findUserByEmail(e);
+    if (other && other.id !== target.id) return res.status(409).json({ error: "Another account already uses that email." });
+    target.email = e;
+  }
+  if (password) {
+    if (String(password).length < 4) return res.status(400).json({ error: "Password must be at least 4 characters." });
+    target.passwordHash = hashPassword(String(password));
+  }
+  if (status !== undefined) {
+    if (!["approved", "disabled", "pending"].includes(status)) return res.status(400).json({ error: "bad status" });
+    if (target.isAdmin) return res.status(400).json({ error: "You can't change an admin's access." });
+    target.status = status;
+  }
+  await save();
+  res.json({ ok: true, user: publicUser(target) });
+});
+
+// delete a user (admin)
+app.delete("/api/admin/users/:id", auth, adminOnly, async (req, res) => {
+  const target = findUserById(req.params.id);
+  if (!target) return res.status(404).json({ error: "user not found" });
+  if (target.isAdmin) return res.status(400).json({ error: "You can't delete an admin account." });
+  db().users = db().users.filter((u) => u.id !== target.id);
+  await save();
+  res.json({ ok: true });
+});
+
 // ---------------------------- kick proxy ----------------------------
 app.get("/kick/channel/:slug", async (req, res) => {
   try {

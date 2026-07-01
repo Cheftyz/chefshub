@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
 import type { User } from "../lib/auth";
 import { useAuth } from "../lib/auth";
-import { adminListUsers, adminSetStatus } from "../lib/admin";
-import { IcSpinner } from "./Icons";
+import {
+  adminListUsers,
+  adminSetStatus,
+  adminCreateUser,
+  adminUpdateUser,
+  adminDeleteUser,
+} from "../lib/admin";
+import { Modal } from "./Modal";
+import { IcSpinner, IcPlus, IcEdit, IcTrash } from "./Icons";
 
 const STATUS_STYLE: Record<string, string> = {
   approved: "bg-emerald-500/15 text-emerald-400",
@@ -10,15 +17,110 @@ const STATUS_STYLE: Record<string, string> = {
   disabled: "bg-red-500/15 text-red-400",
 };
 
+const input =
+  "w-full rounded-lg border border-line bg-bg-soft px-3 py-2 text-sm text-slate-100 placeholder:text-muted/70 outline-none focus:border-brand/70 focus:ring-1 focus:ring-brand/40";
+const label = "mb-1 block text-[12px] font-medium uppercase tracking-wide text-muted";
+const btnPrimary =
+  "flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed";
+
+type Editing = { mode: "create" } | { mode: "edit"; user: User } | null;
+
+function UserDialog({ editing, onClose, onSaved }: { editing: Editing; onClose: () => void; onSaved: () => void }) {
+  const isEdit = editing?.mode === "edit";
+  const existing = isEdit ? editing.user : null;
+  const [displayName, setDisplayName] = useState(existing?.displayName ?? "");
+  const [email, setEmail] = useState(existing?.email ?? "");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<User["status"]>(existing?.status ?? "approved");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    const r = isEdit
+      ? await adminUpdateUser(existing!.id, { displayName, email, password: password || undefined, status })
+      : await adminCreateUser({ displayName, email, password, status });
+    setBusy(false);
+    if (r.ok) onSaved();
+    else setError(r.error || "Save failed.");
+  };
+
+  const remove = async () => {
+    if (!existing || busy) return;
+    setBusy(true);
+    setError(null);
+    const r = await adminDeleteUser(existing.id);
+    setBusy(false);
+    if (r.ok) onSaved();
+    else setError(r.error || "Delete failed.");
+  };
+
+  const lockStatus = isEdit && existing?.isAdmin; // don't change an admin's status
+
+  return (
+    <Modal
+      title={isEdit ? `Edit ${existing?.displayName}` : "New user"}
+      subtitle={isEdit ? "Update this account. Leave password blank to keep it." : "Create an account. It's approved and ready to use."}
+      onClose={onClose}
+      footer={
+        <>
+          {isEdit && !existing?.isAdmin && (
+            <button
+              onClick={remove}
+              disabled={busy}
+              className="mr-auto flex items-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm text-muted hover:border-red-500/40 hover:text-red-400 disabled:opacity-40"
+            >
+              <IcTrash width={14} height={14} /> Delete
+            </button>
+          )}
+          <button className={btnPrimary} onClick={save} disabled={busy}>
+            {busy && <IcSpinner width={15} height={15} />}
+            {isEdit ? "Save changes" : "Create account"}
+          </button>
+        </>
+      }
+    >
+      <label className={label}>Name</label>
+      <input className={`${input} mb-4`} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+
+      <label className={label}>Email</label>
+      <input className={`${input} mb-4`} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+
+      <label className={label}>{isEdit ? "New password (optional)" : "Password"}</label>
+      <input
+        className={`${input} mb-4`}
+        type="text"
+        placeholder={isEdit ? "leave blank to keep current" : "at least 4 characters"}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+
+      {!lockStatus && (
+        <>
+          <label className={label}>Access</label>
+          <select className={input} value={status} onChange={(e) => setStatus(e.target.value as User["status"])}>
+            <option value="approved">Approved (can use the app)</option>
+            <option value="disabled">Off (blocked)</option>
+            <option value="pending">Pending</option>
+          </select>
+        </>
+      )}
+
+      {error && <p className="mt-3 text-[13px] text-red-400">{error}</p>}
+    </Modal>
+  );
+}
+
 export function AdminPanel() {
   const me = useAuth((s) => s.user);
   const [users, setUsers] = useState<User[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Editing>(null);
 
-  const load = async () => {
-    setUsers(await adminListUsers());
-  };
+  const load = async () => setUsers(await adminListUsers());
   useEffect(() => {
     load();
   }, []);
@@ -38,15 +140,18 @@ export function AdminPanel() {
     <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-thin">
       <div className="mx-auto max-w-3xl">
         <div className="mb-1 flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-slate-100">User access</h1>
+          <h1 className="text-lg font-semibold text-slate-100">User accounts</h1>
           {pendingCount > 0 && (
             <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-400">
               {pendingCount} awaiting approval
             </span>
           )}
+          <button className={`${btnPrimary} ml-auto`} onClick={() => setEditing({ mode: "create" })}>
+            <IcPlus width={15} height={15} /> New user
+          </button>
         </div>
         <p className="mb-5 text-[13px] text-muted">
-          Turn each account's access to the app on or off. New sign-ups start as “pending”.
+          See everyone, turn access on/off, or open an account to edit it. New sign-ups start as “pending”.
         </p>
 
         {error && <p className="mb-3 text-[13px] text-red-400">{error}</p>}
@@ -56,7 +161,7 @@ export function AdminPanel() {
             <IcSpinner width={18} height={18} /> Loading users…
           </div>
         ) : users.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted">No users yet.</p>
+          <p className="py-10 text-center text-sm text-muted">No users yet. Add one with “New user”.</p>
         ) : (
           <div className="overflow-hidden rounded-xl border border-line">
             <table className="w-full text-sm">
@@ -64,7 +169,7 @@ export function AdminPanel() {
                 <tr>
                   <th className="px-4 py-2.5 text-left font-semibold">User</th>
                   <th className="px-4 py-2.5 text-left font-semibold">Status</th>
-                  <th className="px-4 py-2.5 text-right font-semibold">Access</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Manage</th>
                 </tr>
               </thead>
               <tbody>
@@ -81,6 +186,7 @@ export function AdminPanel() {
                               ADMIN
                             </span>
                           )}
+                          {isMe && <span className="ml-2 text-[11px] text-muted">(you)</span>}
                         </div>
                         <div className="text-[12px] text-muted">{u.email}</div>
                       </td>
@@ -91,29 +197,31 @@ export function AdminPanel() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
-                          {u.isAdmin ? (
-                            <span className="text-[12px] text-muted">—</span>
-                          ) : busy ? (
-                            <IcSpinner width={16} height={16} className="text-muted" />
-                          ) : u.status === "approved" ? (
-                            <button
-                              onClick={() => setStatus(u, "disabled")}
-                              className="rounded-md border border-line px-3 py-1.5 text-[12px] font-medium text-muted hover:border-red-500/40 hover:text-red-400"
-                            >
-                              Turn off
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => setStatus(u, "approved")}
-                              className="rounded-md bg-brand px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-brand/90"
-                            >
-                              {u.status === "pending" ? "Approve" : "Turn on"}
-                            </button>
-                          )}
-                          {!u.isAdmin && u.status === "disabled" && !busy && (
-                            <span className="text-[11px] text-muted">off</span>
-                          )}
-                          {isMe && <span className="text-[11px] text-muted">(you)</span>}
+                          {!u.isAdmin &&
+                            (busy ? (
+                              <IcSpinner width={16} height={16} className="text-muted" />
+                            ) : u.status === "approved" ? (
+                              <button
+                                onClick={() => setStatus(u, "disabled")}
+                                className="rounded-md border border-line px-3 py-1.5 text-[12px] font-medium text-muted hover:border-red-500/40 hover:text-red-400"
+                              >
+                                Turn off
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setStatus(u, "approved")}
+                                className="rounded-md bg-brand px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-brand/90"
+                              >
+                                {u.status === "pending" ? "Approve" : "Turn on"}
+                              </button>
+                            ))}
+                          <button
+                            onClick={() => setEditing({ mode: "edit", user: u })}
+                            title="Open & edit"
+                            className="flex items-center gap-1 rounded-md border border-line px-2.5 py-1.5 text-[12px] font-medium text-muted hover:border-brand/40 hover:text-slate-200"
+                          >
+                            <IcEdit width={13} height={13} /> Edit
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -124,6 +232,17 @@ export function AdminPanel() {
           </div>
         )}
       </div>
+
+      {editing && (
+        <UserDialog
+          editing={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }
