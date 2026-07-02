@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useStore } from "./lib/store";
 import { useAuth } from "./lib/auth";
 import { chat } from "./lib/chat";
-import { TopBar } from "./components/TopBar";
+import { NavRail } from "./components/NavRail";
 import { Sidebar } from "./components/Sidebar";
 import { ChatArea } from "./components/ChatArea";
 import { Composer } from "./components/Composer";
@@ -53,12 +53,12 @@ export default function App() {
 
   return (
     <AuthGate>
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg text-slate-200">
-      <TopBar screen={screen} onScreen={setScreen} />
+    <div className="flex h-screen w-screen overflow-hidden bg-bg text-slate-200">
+      <NavRail screen={screen} onScreen={setScreen} />
       {screen === "admin" ? (
         <AdminPanel />
       ) : (
-        <div className="flex flex-1 overflow-hidden">
+        <>
           <Sidebar
             onAddAccount={() => setDialog("account")}
             onJoinChannel={() => setDialog("channel")}
@@ -67,7 +67,7 @@ export default function App() {
             <ChatArea />
             <Composer onEditPhrases={() => setDialog("phrases")} />
           </main>
-        </div>
+        </>
       )}
 
       {dialog === "account" && <AddAccountDialog onClose={() => setDialog(null)} />}

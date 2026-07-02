@@ -38,14 +38,14 @@ export function ChatArea() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* channel tabs */}
-      <div className="flex items-center gap-1 border-b border-line px-3 py-2">
+      <div className="flex h-14 shrink-0 items-center gap-1 overflow-x-auto border-b border-line px-3 scrollbar-thin">
         {channels.map((c) => {
           const active = c.id === activeChannelId;
           return (
             <button
               key={c.id}
               onClick={() => setActiveChannel(c.id)}
-              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium ${
+              className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium ${
                 active ? "bg-brand/15 text-brand-soft" : "text-muted hover:bg-white/5 hover:text-slate-200"
               }`}
             >

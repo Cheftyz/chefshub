@@ -34,6 +34,14 @@ export function Sidebar({ onAddAccount, onJoinChannel }: Props) {
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line bg-bg-panel">
+      {/* platform header */}
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-4">
+        <PlatformBadge platform={view} size={18} />
+        <span className="font-display text-sm font-semibold tracking-tight text-slate-100">
+          {platformLabel}
+        </span>
+      </div>
+
       {/* accounts */}
       <div className="px-3 pt-4">
         <div className="mb-2 flex items-center justify-between px-1">
