@@ -27,7 +27,7 @@ const input =
   "w-full rounded-lg border border-line bg-bg-soft px-3 py-2 text-sm text-slate-100 placeholder:text-muted/70 outline-none focus:border-brand/70 focus:ring-1 focus:ring-brand/40";
 const label = "mb-1 block text-[12px] font-medium uppercase tracking-wide text-muted";
 const btnPrimary =
-  "flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed";
+  "flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-ink hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed";
 
 type Editing = { mode: "create" } | { mode: "edit"; user: User } | null;
 
@@ -123,7 +123,7 @@ function BotManager({ userId }: { userId: string }) {
         <button
           onClick={add}
           disabled={busy || !username.trim() || !token.trim()}
-          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-brand/90 disabled:opacity-40"
+          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-[12px] font-semibold text-brand-ink hover:bg-brand/90 disabled:opacity-40"
         >
           {busy ? <IcSpinner width={13} height={13} /> : <IcPlus width={13} height={13} />} Add bot
         </button>
@@ -319,7 +319,7 @@ export function AdminPanel() {
                             ) : (
                               <button
                                 onClick={() => setStatus(u, "approved")}
-                                className="rounded-md bg-brand px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-brand/90"
+                                className="rounded-md bg-brand px-3 py-1.5 text-[12px] font-semibold text-brand-ink hover:bg-brand/90"
                               >
                                 {u.status === "pending" ? "Approve" : "Turn on"}
                               </button>

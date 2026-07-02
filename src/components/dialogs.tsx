@@ -6,7 +6,7 @@ import { PLATFORMS } from "./platform";
 import { IcPlus, IcSpinner, IcTrash } from "./Icons";
 
 const btnPrimary =
-  "flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
+  "flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-brand-ink hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
 const input =
   "w-full rounded-lg border border-line bg-bg-soft px-3 py-2 text-sm text-slate-100 placeholder:text-muted/70 outline-none focus:border-brand/70 focus:ring-1 focus:ring-brand/40";
 const label = "mb-1 block text-[12px] font-medium uppercase tracking-wide text-muted";
@@ -205,7 +205,7 @@ export function PhrasesDialog({ onClose }: { onClose: () => void }) {
         />
         <button
           onClick={add}
-          className="flex shrink-0 items-center justify-center rounded-lg bg-brand px-3 text-white hover:bg-brand/90"
+          className="flex shrink-0 items-center justify-center rounded-lg bg-brand px-3 text-brand-ink hover:bg-brand/90"
         >
           <IcPlus />
         </button>

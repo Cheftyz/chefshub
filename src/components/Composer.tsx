@@ -252,7 +252,7 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
         <button
           onClick={doSend}
           disabled={!canSend || !text.trim()}
-          className="flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-ink hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <IcSend width={15} height={15} />
           Send

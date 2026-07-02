@@ -6,7 +6,7 @@ const input =
   "w-full rounded-lg border border-line bg-bg-soft px-3 py-2.5 text-sm text-slate-100 placeholder:text-muted/70 outline-none focus:border-brand/70 focus:ring-1 focus:ring-brand/40";
 const label = "mb-1 block text-[12px] font-medium uppercase tracking-wide text-muted";
 const primary =
-  "mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-40";
+  "mt-5 flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-brand-ink hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-40";
 
 type Mode = "login" | "signup" | "forgot" | "reset";
 
@@ -15,11 +15,15 @@ function Shell({ subtitle, children }: { subtitle: string; children: ReactNode }
     <div className="flex h-screen w-screen items-center justify-center bg-bg px-4 text-slate-200">
       <div className="w-full max-w-sm rounded-2xl border border-line bg-bg-panel p-7 shadow-2xl">
         <div className="mb-6 flex flex-col items-center text-center">
-          <img src={`${import.meta.env.BASE_URL}chef.svg`} alt="" className="mb-3 h-11 w-11" />
-          <h1 className="text-xl font-bold tracking-tight">
-            MB <span className="text-brand-soft">Chatters</span>
+          <img
+            src={`${import.meta.env.BASE_URL}logo.svg`}
+            alt=""
+            className="mb-3 h-14 w-14 drop-shadow-[0_8px_24px_rgba(34,224,107,0.35)]"
+          />
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-100">
+            MB <span className="text-brand">Chatters</span>
           </h1>
-          <p className="mt-1 text-[13px] text-muted">{subtitle}</p>
+          <p className="mt-1.5 text-[13px] text-muted">{subtitle}</p>
         </div>
         {children}
       </div>

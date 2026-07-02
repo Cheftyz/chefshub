@@ -6,22 +6,28 @@ export default {
     extend: {
       colors: {
         bg: {
-          DEFAULT: "#0b0b10",
-          soft: "#101017",
-          panel: "#0e0e14",
-          elev: "#16161f",
+          DEFAULT: "#0a0b0c", // near-black base
+          soft: "#14161a", // inputs / subtle fills
+          panel: "#0e0f12", // sidebar / rails
+          elev: "#171a1f", // modals / elevated cards
         },
-        line: "#22222e",
+        line: "#23262d", // hairline borders
         brand: {
-          DEFAULT: "#8b5cf6",
-          soft: "#a78bfa",
-          dim: "#6d28d9",
+          DEFAULT: "#22e06b", // vivid green
+          soft: "#6af2a3", // lighter green for text/links
+          dim: "#16a34a", // darker green for hovers
+          ink: "#06140c", // near-black text to sit on green
         },
-        muted: "#8b8b98",
+        muted: "#828a95",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        display: ["Space Grotesk", "Inter", "system-ui", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+      },
+      boxShadow: {
+        glow: "0 10px 40px -12px rgba(34, 224, 107, 0.35)",
+        card: "0 20px 60px -20px rgba(0, 0, 0, 0.6)",
       },
       keyframes: {
         "fade-in": {

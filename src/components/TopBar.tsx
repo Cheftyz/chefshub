@@ -21,10 +21,10 @@ export function TopBar({ screen, onScreen }: Props) {
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-4 border-b border-line bg-bg-panel px-3">
-      <div className="flex items-center gap-2 pl-1 pr-2">
-        <img src={`${import.meta.env.BASE_URL}chef.svg`} alt="" className="h-6 w-6" />
-        <span className="text-[15px] font-bold tracking-tight">
-          MB <span className="text-brand-soft">Chatters</span>
+      <div className="flex items-center gap-2.5 pl-1 pr-2">
+        <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" className="h-7 w-7" />
+        <span className="font-display text-[15px] font-semibold tracking-tight text-slate-100">
+          MB <span className="text-brand">Chatters</span>
         </span>
       </div>
 
