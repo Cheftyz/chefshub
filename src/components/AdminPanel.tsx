@@ -278,6 +278,7 @@ export function AdminPanel() {
                 <tr>
                   <th className="px-4 py-2.5 text-left font-semibold">User</th>
                   <th className="px-4 py-2.5 text-left font-semibold">Status</th>
+                  <th className="px-4 py-2.5 text-left font-semibold">Bots</th>
                   <th className="px-4 py-2.5 text-right font-semibold">Manage</th>
                 </tr>
               </thead>
@@ -303,6 +304,19 @@ export function AdminPanel() {
                         <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLE[u.status]}`}>
                           {u.status}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => setEditing({ mode: "edit", user: u })}
+                          title="Manage this user's bots"
+                          className={`rounded-md border px-2.5 py-1 text-[12px] font-medium ${
+                            u.botCount
+                              ? "border-line text-slate-200 hover:border-brand/50 hover:text-brand-soft"
+                              : "border-transparent text-muted/70 hover:text-slate-300"
+                          }`}
+                        >
+                          {u.botCount ? `${u.botCount} bot${u.botCount === 1 ? "" : "s"}` : "no bots"}
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
@@ -345,7 +359,10 @@ export function AdminPanel() {
       {editing && (
         <UserDialog
           editing={editing}
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null);
+            load(); // refresh bot counts etc. after managing bots
+          }}
           onSaved={() => {
             setEditing(null);
             load();

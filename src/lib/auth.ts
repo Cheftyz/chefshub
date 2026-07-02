@@ -13,6 +13,7 @@ export interface User {
   status: "pending" | "approved" | "disabled";
   isAdmin: boolean;
   createdAt: number;
+  botCount?: number;
 }
 
 function getToken(): string | null {
