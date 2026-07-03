@@ -8,8 +8,10 @@ import {
   IcClose,
   IcEdit,
   IcEmoji,
+  IcLayers,
   IcPause,
   IcPlay,
+  IcPlus,
   IcSend,
 } from "./Icons";
 
@@ -21,7 +23,9 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
   const setActiveAccount = useStore((s) => s.setActiveAccount);
   const channels = useStore((s) => s.channels);
   const activeChannelId = useStore((s) => s.activeChannelId);
-  const phrases = useStore((s) => s.phrases);
+  const groups = useStore((s) => s.groups);
+  const activeGroupId = useStore((s) => s.activeGroupId);
+  const setActiveGroup = useStore((s) => s.setActiveGroup);
   const scheduleDelay = useStore((s) => s.scheduleDelay);
   const scheduled = useStore((s) => s.scheduled);
   const cancelScheduled = useStore((s) => s.cancelScheduled);
@@ -31,11 +35,13 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
   const setAutoEnabled = useStore((s) => s.setAutoEnabled);
   const autoInterval = useStore((s) => s.autoInterval);
   const setAutoInterval = useStore((s) => s.setAutoInterval);
+  const view = useStore((s) => s.view);
 
   const [text, setText] = useState("");
   const [now, setNow] = useState(Date.now());
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [acctOpen, setAcctOpen] = useState(false);
+  const [groupOpen, setGroupOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -45,15 +51,15 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
     return () => clearInterval(t);
   }, [scheduled.length]);
 
-  const view = useStore((s) => s.view);
+  const activeGroup = groups.find((g) => g.id === activeGroupId) ?? groups[0] ?? null;
+  const phrases = activeGroup?.phrases ?? [];
+
   const channel = channels.find((c) => c.id === activeChannelId) ?? null;
   const platform = channel?.platform ?? null;
-  // scope to the active channel's platform, or the current tab when none is open
   const scope = platform ?? view;
   const eligible = accounts.filter((a) => a.platform === scope);
   const activeAcc = accounts.find((a) => a.id === activeAccountId);
-  const sender =
-    activeAcc && platform && activeAcc.platform === platform ? activeAcc : eligible[0] ?? null;
+  const sender = activeAcc && platform && activeAcc.platform === platform ? activeAcc : eligible[0] ?? null;
   const canSend = !!channel && !!sender;
 
   const doSend = () => {
@@ -77,65 +83,90 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
 
   return (
     <div className="border-t border-line bg-bg-panel">
-      {/* scheduled countdown rows */}
-      {scheduled.map((s) => {
-        const remain = Math.max(0, Math.ceil((s.fireAt - now) / 1000));
-        return (
-          <div
-            key={s.id}
-            className="flex items-center gap-2 border-b border-line/60 px-4 py-1.5 text-[12px] text-muted animate-fade-in"
+      {/* toolbar: message group + auto */}
+      <div className="flex items-center gap-2 px-3 py-2">
+        <div className="relative">
+          <button
+            onClick={() => setGroupOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-lg border border-line bg-bg-soft px-2.5 py-1.5 text-[13px] text-slate-100 hover:border-brand/40"
           >
-            <IcClock width={13} height={13} className="text-brand-soft" />
-            <span className="tabular-nums font-medium text-brand-soft">{remain}s</span>
-            <span className="text-muted/60">·</span>
-            <PlatformBadge platform={s.platform} size={12} />
-            <span className="text-slate-300">{s.accountName}</span>
-            <span className="text-muted/60">→ {s.channelName}</span>
-            <span className="text-muted/60">·</span>
-            <span className="truncate text-slate-200">{s.text}</span>
-            <button
-              onClick={() => cancelScheduled(s.id)}
-              className="ml-auto rounded p-0.5 text-muted hover:text-red-400"
-              title="Cancel"
-            >
-              <IcClose width={13} height={13} />
-            </button>
-          </div>
-        );
-      })}
+            <IcLayers width={14} height={14} className="text-brand" />
+            <span className="font-medium">{activeGroup ? activeGroup.name : "No group"}</span>
+            <span className="rounded bg-white/5 px-1 text-[10px] tabular-nums text-muted">{phrases.length}</span>
+            <IcChevron width={13} height={13} className="text-muted" />
+          </button>
+          {groupOpen && (
+            <div className="absolute bottom-full left-0 z-30 mb-1 w-52 overflow-hidden rounded-lg border border-line bg-bg-elev shadow-card animate-fade-in">
+              <div className="max-h-56 overflow-y-auto scrollbar-thin py-1">
+                {groups.length === 0 && (
+                  <p className="px-3 py-2 text-[12px] italic text-muted/70">No groups yet</p>
+                )}
+                {groups.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => {
+                      setActiveGroup(g.id);
+                      setGroupOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-[13px] hover:bg-white/5 ${
+                      g.id === activeGroup?.id ? "text-brand-soft" : "text-slate-200"
+                    }`}
+                  >
+                    <span className="truncate">{g.name}</span>
+                    <span className="text-[10px] tabular-nums text-muted">{g.phrases.length}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => {
+                  setGroupOpen(false);
+                  onEditPhrases();
+                }}
+                className="flex w-full items-center gap-1.5 border-t border-line px-3 py-2 text-left text-[12px] font-medium text-brand-soft hover:bg-white/5"
+              >
+                <IcPlus width={13} height={13} /> New / manage groups
+              </button>
+            </div>
+          )}
+        </div>
 
-      {/* auto row */}
-      <div className="flex items-center gap-3 px-4 py-2 text-[12px]">
-        <button
-          onClick={() => setAutoEnabled(!autoEnabled)}
-          className={`flex items-center gap-1.5 rounded-md px-2 py-1 font-medium transition-colors ${
-            autoEnabled
-              ? "bg-emerald-500/15 text-emerald-400"
-              : "bg-white/5 text-muted hover:text-slate-200"
-          }`}
-        >
-          {autoEnabled ? <IcPause width={12} height={12} /> : <IcPlay width={12} height={12} />}
-          Auto {autoEnabled ? "ON" : "OFF"}
-        </button>
-        <span className="text-muted">every</span>
-        <input
-          type="number"
-          min={1}
-          value={autoInterval}
-          onChange={(e) => setAutoInterval(Number(e.target.value))}
-          className="w-16 rounded-md border border-line bg-bg-soft px-2 py-1 text-center text-slate-100 outline-none focus:border-brand/60"
-        />
-        <span className="text-muted">sec · random account · your custom phrases only</span>
+        {/* auto controls */}
+        <div className="ml-auto flex items-center gap-2 text-[12px]">
+          <button
+            onClick={() => setAutoEnabled(!autoEnabled)}
+            title="Auto-send random phrases from the active group"
+            className={`flex items-center gap-1.5 rounded-md px-2 py-1 font-medium transition-colors ${
+              autoEnabled ? "bg-brand/15 text-brand" : "bg-white/5 text-muted hover:text-slate-200"
+            }`}
+          >
+            {autoEnabled ? <IcPause width={12} height={12} /> : <IcPlay width={12} height={12} />}
+            Auto {autoEnabled ? "ON" : "OFF"}
+          </button>
+          <span className="text-muted">every</span>
+          <input
+            type="number"
+            min={1}
+            value={autoInterval}
+            onChange={(e) => setAutoInterval(Number(e.target.value))}
+            className="w-14 rounded-md border border-line bg-bg-soft px-2 py-1 text-center text-slate-100 outline-none focus:border-brand/60"
+          />
+          <span className="text-muted">s</span>
+        </div>
       </div>
 
-      {/* quick phrases */}
-      <div className="flex flex-wrap items-center gap-1.5 px-4 pb-2">
+      {/* quick phrases for the active group */}
+      <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2">
         <button
           onClick={onEditPhrases}
           className="flex items-center gap-1 rounded-md border border-line bg-bg-soft px-2 py-1 text-[12px] font-medium text-muted hover:text-slate-200"
         >
           <IcEdit width={12} height={12} /> Edit
         </button>
+        {phrases.length === 0 && (
+          <span className="px-1 text-[12px] italic text-muted/70">
+            No phrases in this group — click Edit to add some.
+          </span>
+        )}
         {phrases.map((p) => (
           <button
             key={p.id}
@@ -153,9 +184,36 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
         ))}
       </div>
 
+      {/* scheduled queue (chips) */}
+      {scheduled.length > 0 && (
+        <div className="flex gap-1.5 overflow-x-auto border-t border-line/60 px-3 py-2 scrollbar-thin">
+          {scheduled.map((s) => {
+            const remain = Math.max(0, Math.ceil((s.fireAt - now) / 1000));
+            return (
+              <div
+                key={s.id}
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-bg-soft py-1 pl-2 pr-1 text-[11px] animate-fade-in"
+              >
+                <IcClock width={11} height={11} className="text-brand" />
+                <span className="tabular-nums font-semibold text-brand">{remain}s</span>
+                <PlatformBadge platform={s.platform} size={11} />
+                <span className="max-w-[140px] truncate text-slate-200">{s.text}</span>
+                <span className="text-muted/60">→ {s.channelName}</span>
+                <button
+                  onClick={() => cancelScheduled(s.id)}
+                  className="rounded-full p-0.5 text-muted hover:bg-white/10 hover:text-red-400"
+                  title="Cancel"
+                >
+                  <IcClose width={12} height={12} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* message input */}
       <div className="flex items-center gap-2 px-3 pb-3 pt-1">
-        {/* account selector (same platform as active channel) */}
         <div className="relative">
           <button
             onClick={() => setAcctOpen((v) => !v)}
@@ -191,7 +249,6 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
           )}
         </div>
 
-        {/* text field */}
         <div className="relative flex-1">
           <input
             ref={inputRef}
@@ -238,7 +295,6 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
           )}
         </div>
 
-        {/* schedule button */}
         <button
           onClick={doSchedule}
           disabled={!canSend || !text.trim()}
@@ -248,7 +304,6 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
           <IcClock width={17} height={17} />
         </button>
 
-        {/* send */}
         <button
           onClick={doSend}
           disabled={!canSend || !text.trim()}

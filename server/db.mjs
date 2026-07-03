@@ -95,8 +95,8 @@ export function findUserById(id) {
   return db().users.find((u) => u.id === id);
 }
 export function listUsers() {
-  // never expose passwordHash or bot tokens in the admin list
-  return db().users.map(({ passwordHash, bots, ...safe }) => ({
+  // never expose passwordHash or bot tokens in the admin list; keep it lean
+  return db().users.map(({ passwordHash, bots, groups, ...safe }) => ({
     ...safe,
     botCount: Array.isArray(bots) ? bots.length : 0,
   }));

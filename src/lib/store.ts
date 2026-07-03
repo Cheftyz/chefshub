@@ -1,10 +1,11 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Account, ChatMessage, Channel, ConnState, Phrase, Platform, Scheduled } from "./types";
+import type { Account, ChatMessage, Channel, ConnState, Phrase, PhraseGroup, Platform, Scheduled } from "./types";
 import { channelId } from "./types";
 import { chat } from "./chat";
 import { resolveKickChannel } from "./kick";
 import { listMyBots, addMyBot, updateMyBot, deleteMyBot } from "./bots";
+import { listGroups, saveGroups } from "./groups";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -31,7 +32,8 @@ interface State {
   activeAccountId: string | null;
   channels: Channel[];
   activeChannelId: string | null;
-  phrases: Phrase[];
+  groups: PhraseGroup[];
+  activeGroupId: string | null;
   scheduleDelay: number;
   autoEnabled: boolean;
   autoInterval: number;
@@ -56,10 +58,16 @@ interface State {
   removeChannel: (id: string) => void;
   setActiveChannel: (id: string) => void;
 
-  // phrases
-  addPhrase: (text: string, delay?: number) => void;
-  updatePhrase: (id: string, patch: Partial<Phrase>) => void;
-  removePhrase: (id: string) => void;
+  // message groups (phrase presets) — stored on the server per user
+  loadGroups: () => Promise<void>;
+  clearGroups: () => void;
+  addGroup: (name: string) => void;
+  renameGroup: (id: string, name: string) => void;
+  deleteGroup: (id: string) => void;
+  setActiveGroup: (id: string) => void;
+  addPhrase: (groupId: string, text: string, delay?: number) => void;
+  updatePhrase: (groupId: string, phraseId: string, patch: Partial<Phrase>) => void;
+  removePhrase: (groupId: string, phraseId: string) => void;
   setScheduleDelay: (n: number) => void;
 
   // auto
@@ -97,11 +105,8 @@ export const useStore = create<State>()(
       activeAccountId: null,
       channels: [],
       activeChannelId: null,
-      phrases: [
-        { id: uid(), text: "gg wp", delay: 30 },
-        { id: uid(), text: "LMAO", delay: 30 },
-        { id: uid(), text: "W", delay: 30 },
-      ],
+      groups: [],
+      activeGroupId: null,
       scheduleDelay: 30,
       autoEnabled: false,
       autoInterval: 180,
@@ -211,14 +216,61 @@ export const useStore = create<State>()(
       },
       setActiveChannel: (id) => set({ activeChannelId: id }),
 
-      addPhrase: (text, delay) => {
+      loadGroups: async () => {
+        const groups = await listGroups();
+        set((s) => ({
+          groups,
+          activeGroupId: groups.find((g) => g.id === s.activeGroupId)?.id ?? groups[0]?.id ?? null,
+        }));
+      },
+      clearGroups: () => set({ groups: [], activeGroupId: null }),
+      addGroup: (name) => {
+        const g: PhraseGroup = { id: uid(), name: name.trim() || "New group", phrases: [] };
+        set((s) => ({ groups: [...s.groups, g], activeGroupId: g.id }));
+        saveGroups(get().groups);
+      },
+      renameGroup: (id, name) => {
+        set((s) => ({ groups: s.groups.map((g) => (g.id === id ? { ...g, name: name.trim() || g.name } : g)) }));
+        saveGroups(get().groups);
+      },
+      deleteGroup: (id) => {
+        set((s) => {
+          const groups = s.groups.filter((g) => g.id !== id);
+          return { groups, activeGroupId: s.activeGroupId === id ? groups[0]?.id ?? null : s.activeGroupId };
+        });
+        saveGroups(get().groups);
+      },
+      setActiveGroup: (id) => set({ activeGroupId: id }),
+      addPhrase: (groupId, text, delay) => {
         const t = text.trim();
         if (!t) return;
-        set((s) => ({ phrases: [...s.phrases, { id: uid(), text: t, delay: delay ?? s.scheduleDelay }] }));
+        set((s) => ({
+          groups: s.groups.map((g) =>
+            g.id === groupId
+              ? { ...g, phrases: [...g.phrases, { id: uid(), text: t, delay: delay ?? s.scheduleDelay }] }
+              : g
+          ),
+        }));
+        saveGroups(get().groups);
       },
-      updatePhrase: (id, patch) =>
-        set((s) => ({ phrases: s.phrases.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
-      removePhrase: (id) => set((s) => ({ phrases: s.phrases.filter((p) => p.id !== id) })),
+      updatePhrase: (groupId, phraseId, patch) => {
+        set((s) => ({
+          groups: s.groups.map((g) =>
+            g.id === groupId
+              ? { ...g, phrases: g.phrases.map((p) => (p.id === phraseId ? { ...p, ...patch } : p)) }
+              : g
+          ),
+        }));
+        saveGroups(get().groups);
+      },
+      removePhrase: (groupId, phraseId) => {
+        set((s) => ({
+          groups: s.groups.map((g) =>
+            g.id === groupId ? { ...g, phrases: g.phrases.filter((p) => p.id !== phraseId) } : g
+          ),
+        }));
+        saveGroups(get().groups);
+      },
       setScheduleDelay: (n) => set({ scheduleDelay: n }),
 
       setAutoEnabled: (b) => set({ autoEnabled: b }),
@@ -309,8 +361,10 @@ export const useStore = create<State>()(
       },
 
       runAuto: () => {
-        const { accounts, activeChannelId, channels, phrases } = get();
+        const { accounts, activeChannelId, channels, groups, activeGroupId } = get();
         const channel = channels.find((c) => c.id === activeChannelId);
+        const group = groups.find((g) => g.id === activeGroupId) ?? groups[0];
+        const phrases = group?.phrases ?? [];
         if (!channel || !phrases.length) return;
         const pool = accounts.filter((a) => a.visible && a.token && a.platform === channel.platform);
         if (!pool.length) return;
@@ -336,11 +390,11 @@ export const useStore = create<State>()(
       migrate: (persisted, version) => (version < 1 ? (undefined as unknown as State) : (persisted as State)),
       partialize: (s) => ({
         view: s.view,
-        // accounts (bots) are NOT persisted locally — they live on the server
+        // accounts (bots) and groups are NOT persisted locally — they live on the server
         activeAccountId: s.activeAccountId,
+        activeGroupId: s.activeGroupId,
         channels: s.channels,
         activeChannelId: s.activeChannelId,
-        phrases: s.phrases,
         scheduleDelay: s.scheduleDelay,
         autoInterval: s.autoInterval,
       }),

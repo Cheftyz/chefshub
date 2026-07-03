@@ -300,6 +300,45 @@ app.delete("/api/admin/users/:id/bots/:botId", auth, adminOnly, async (req, res)
   res.json({ ok: true });
 });
 
+// -------------------- message groups (phrase presets per game) --------------------
+function ensureGroups(u) {
+  if (!Array.isArray(u.groups)) u.groups = [];
+  if (u.groups.length === 0) {
+    u.groups = [
+      {
+        id: uid(),
+        name: "Default",
+        phrases: [
+          { id: uid(), text: "gg wp", delay: 30 },
+          { id: uid(), text: "LMAO", delay: 30 },
+          { id: uid(), text: "W", delay: 30 },
+        ],
+      },
+    ];
+  }
+  return u.groups;
+}
+app.get("/api/me/groups", auth, async (req, res) => {
+  const seeded = !Array.isArray(req.user.groups) || req.user.groups.length === 0;
+  const groups = ensureGroups(req.user);
+  if (seeded) await save();
+  res.json({ groups });
+});
+app.put("/api/me/groups", auth, async (req, res) => {
+  const incoming = Array.isArray(req.body?.groups) ? req.body.groups : [];
+  req.user.groups = incoming.slice(0, 50).map((g) => ({
+    id: String(g.id || uid()),
+    name: String(g.name || "Group").slice(0, 40),
+    phrases: (Array.isArray(g.phrases) ? g.phrases : []).slice(0, 300).map((p) => ({
+      id: String(p.id || uid()),
+      text: String(p.text || "").slice(0, 500),
+      delay: Number(p.delay) > 0 ? Number(p.delay) : 30,
+    })),
+  }));
+  await save();
+  res.json({ ok: true, groups: req.user.groups });
+});
+
 // ---------------------------- kick proxy ----------------------------
 app.get("/kick/channel/:slug", async (req, res) => {
   try {

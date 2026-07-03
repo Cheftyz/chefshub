@@ -117,6 +117,13 @@ export const IcKick = (p: P) => (
     <path d="M3 3h5.4v5.4h1.8V6.6h1.8V3H19v7.2h-1.8V12H15v1.8h1.8v1.8H19V21h-6V17.4h-1.8v-1.8H9.4V21H3V3Z" />
   </svg>
 );
+export const IcLayers = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m12 2 9 5-9 5-9-5 9-5Z" />
+    <path d="m3 12 9 5 9-5" />
+    <path d="m3 17 9 5 9-5" />
+  </svg>
+);
 export const IcShield = (p: P) => (
   <svg {...base(p)}>
     <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3Z" />

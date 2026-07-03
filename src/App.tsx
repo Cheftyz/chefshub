@@ -25,13 +25,20 @@ export default function App() {
   const runAuto = useStore((s) => s.runAuto);
   const loadBots = useStore((s) => s.loadBots);
   const clearBots = useStore((s) => s.clearBots);
+  const loadGroups = useStore((s) => s.loadGroups);
+  const clearGroups = useStore((s) => s.clearGroups);
 
-  // load this user's bots from the server once they're signed in
+  // load this user's bots + message groups from the server once they're signed in
   const userId = useAuth((s) => s.user?.id ?? null);
   useEffect(() => {
-    if (userId) loadBots();
-    else clearBots();
-  }, [userId, loadBots, clearBots]);
+    if (userId) {
+      loadBots();
+      loadGroups();
+    } else {
+      clearBots();
+      clearGroups();
+    }
+  }, [userId, loadBots, clearBots, loadGroups, clearGroups]);
 
   // reconnect accounts/channels whenever the set changes
   useEffect(() => {

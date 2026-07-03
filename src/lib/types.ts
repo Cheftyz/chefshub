@@ -31,6 +31,13 @@ export interface Phrase {
   delay: number;
 }
 
+/** A named preset set of phrases (e.g. one per game). */
+export interface PhraseGroup {
+  id: string;
+  name: string;
+  phrases: Phrase[];
+}
+
 export interface ChatMessage {
   id: string;
   channelId: string;
