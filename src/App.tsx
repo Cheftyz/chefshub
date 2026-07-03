@@ -60,7 +60,7 @@ export default function App() {
 
   return (
     <AuthGate>
-    <div className="flex h-screen w-screen overflow-hidden bg-bg text-slate-200">
+    <div className="flex h-screen w-screen overflow-hidden text-slate-200">
       <NavRail screen={screen} onScreen={setScreen} />
       {screen === "admin" ? (
         <AdminPanel />

@@ -33,7 +33,7 @@ export function Sidebar({ onAddAccount, onJoinChannel }: Props) {
   };
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line bg-bg-panel">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-white/5 bg-bg-panel/40 backdrop-blur-2xl">
       {/* platform header */}
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-4">
         <PlatformBadge platform={view} size={18} />

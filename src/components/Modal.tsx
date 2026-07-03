@@ -22,7 +22,7 @@ export function Modal({ title, subtitle, onClose, children, footer }: Props) {
       onMouseDown={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl border border-line bg-bg-elev shadow-2xl animate-fade-in"
+        className="w-full max-w-md rounded-xl border border-white/10 bg-bg-elev/85 shadow-2xl backdrop-blur-2xl animate-fade-in"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between p-5 pb-3">

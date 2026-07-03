@@ -62,7 +62,7 @@ export function NavRail({ screen, onScreen }: Props) {
   const initial = (authUser?.displayName || authUser?.email || "?").charAt(0).toUpperCase();
 
   return (
-    <nav className="flex h-full w-16 shrink-0 flex-col items-center gap-1 border-r border-line bg-bg-panel py-3">
+    <nav className="flex h-full w-16 shrink-0 flex-col items-center gap-1 border-r border-white/5 bg-bg-panel/50 py-3 backdrop-blur-2xl">
       <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="MB Chatters" className="mb-2 h-8 w-8" />
 
       {ORDER.map((p) => (

@@ -13,9 +13,12 @@
     height: 100%;
   }
   body {
-    @apply bg-bg text-slate-200 font-sans antialiased;
-    /* whisper of green depth at the top — restrained, minimal */
-    background-image: radial-gradient(1100px 520px at 50% -260px, rgba(34, 224, 107, 0.06), transparent 70%);
+    @apply text-slate-200 font-sans antialiased;
+    background-color: #090a0b;
+    /* soft green ambient glows so the frosted-glass panels have depth to blur */
+    background-image: radial-gradient(820px 480px at 10% -6%, rgba(34, 224, 107, 0.1), transparent 60%),
+      radial-gradient(760px 560px at 102% 108%, rgba(34, 224, 107, 0.07), transparent 55%),
+      radial-gradient(680px 460px at 55% 50%, rgba(34, 224, 107, 0.028), transparent 70%);
     background-attachment: fixed;
   }
   * {

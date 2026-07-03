@@ -38,7 +38,7 @@ export function ChatArea() {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* channel tabs */}
-      <div className="flex h-14 shrink-0 items-center gap-1 overflow-x-auto border-b border-line px-3 scrollbar-thin">
+      <div className="flex h-14 shrink-0 items-center gap-1 overflow-x-auto border-b border-white/5 bg-bg-panel/30 px-3 backdrop-blur-xl scrollbar-thin">
         {channels.map((c) => {
           const active = c.id === activeChannelId;
           return (

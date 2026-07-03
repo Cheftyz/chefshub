@@ -116,7 +116,7 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
   };
 
   return (
-    <div className="border-t border-line bg-bg-panel">
+    <div className="border-t border-white/5 bg-bg-panel/50 backdrop-blur-2xl">
       {/* toolbar: message group + auto */}
       <div className="flex items-center gap-2 px-3 py-2">
         <div className="relative">

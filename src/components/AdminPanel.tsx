@@ -283,7 +283,7 @@ export function AdminPanel() {
         ) : users.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted">No users yet. Add one with “New user”.</p>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-line">
+          <div className="overflow-hidden rounded-xl border border-white/10 bg-bg-panel/40 backdrop-blur-2xl">
             <table className="w-full text-sm">
               <thead className="bg-white/[0.03] text-[11px] uppercase tracking-wider text-muted">
                 <tr>
