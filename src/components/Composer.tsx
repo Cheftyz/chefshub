@@ -3,6 +3,7 @@ import { useStore } from "../lib/store";
 import { toast } from "../lib/toast";
 import { PLATFORMS, PlatformBadge } from "./platform";
 import {
+  IcCheck,
   IcChevron,
   IcClock,
   IcClose,
@@ -13,6 +14,7 @@ import {
   IcPlay,
   IcPlus,
   IcSend,
+  IcUsers,
 } from "./Icons";
 
 const EMOJIS = ["😂", "💀", "🔥", "🗿", "😭", "👍", "❤️", "🎉", "😎", "🤡", "👀", "🐐", "LULW", "KEKW", "Pog", "GG"];
@@ -42,6 +44,9 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [acctOpen, setAcctOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
+  const [broadcast, setBroadcast] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [stagger, setStagger] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -60,25 +65,54 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
   const eligible = accounts.filter((a) => a.platform === scope);
   const activeAcc = accounts.find((a) => a.id === activeAccountId);
   const sender = activeAcc && platform && activeAcc.platform === platform ? activeAcc : eligible[0] ?? null;
-  const canSend = !!channel && !!sender;
+
+  // who a send goes to: the selected set in broadcast mode, else the single sender
+  const targets = broadcast
+    ? selected.filter((id) => eligible.some((a) => a.id === id))
+    : sender
+    ? [sender.id]
+    : [];
+  const canSend = !!channel && targets.length > 0;
+
+  const toggleBroadcast = () => {
+    setBroadcast((v) => {
+      const next = !v;
+      if (next && selected.length === 0) setSelected(eligible.map((a) => a.id));
+      return next;
+    });
+  };
+  const toggleAcc = (id: string) =>
+    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
   const doSend = () => {
-    if (!canSend || !text.trim() || !sender) return;
-    sendNow(sender.id, text.trim());
+    if (!canSend || !text.trim()) return;
+    const t = text.trim();
+    targets.forEach((id, i) => {
+      const extra = i * stagger;
+      if (extra > 0) schedule(id, t, extra);
+      else sendNow(id, t);
+    });
+    if (broadcast && targets.length > 1)
+      toast(`Sent from ${targets.length} accounts${stagger ? ` (staggered ${stagger}s)` : ""}`);
     setText("");
     inputRef.current?.focus();
   };
   const doSchedule = () => {
-    if (!canSend || !text.trim() || !sender) return;
-    schedule(sender.id, text.trim(), scheduleDelay);
-    toast(`Scheduled "${text.trim()}" in ${scheduleDelay}s`);
+    if (!canSend || !text.trim()) return;
+    const t = text.trim();
+    targets.forEach((id, i) => schedule(id, t, scheduleDelay + i * stagger));
+    toast(`Scheduled from ${targets.length} account${targets.length > 1 ? "s" : ""} in ${scheduleDelay}s`);
     setText("");
     inputRef.current?.focus();
   };
   const schedulePhrase = (phraseText: string, delay: number) => {
-    if (!canSend || !sender) return;
-    schedule(sender.id, phraseText, delay);
-    toast(`Scheduled "${phraseText}" in ${delay}s`);
+    if (!canSend) return;
+    targets.forEach((id, i) => schedule(id, phraseText, delay + i * stagger));
+    toast(
+      targets.length > 1
+        ? `Scheduled "${phraseText}" from ${targets.length} accounts`
+        : `Scheduled "${phraseText}" in ${delay}s`
+    );
   };
 
   return (
@@ -130,6 +164,21 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
           )}
         </div>
 
+        {/* broadcast toggle */}
+        <button
+          onClick={toggleBroadcast}
+          title="Send from multiple accounts at once"
+          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+            broadcast ? "bg-brand/15 text-brand" : "border border-line bg-bg-soft text-muted hover:text-slate-200"
+          }`}
+        >
+          <IcUsers width={14} height={14} />
+          Broadcast
+          {broadcast && targets.length > 0 && (
+            <span className="rounded bg-brand/20 px-1 text-[10px] tabular-nums text-brand">{targets.length}</span>
+          )}
+        </button>
+
         {/* auto controls */}
         <div className="ml-auto flex items-center gap-2 text-[12px]">
           <button
@@ -153,6 +202,64 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
           <span className="text-muted">s</span>
         </div>
       </div>
+
+      {/* broadcast: pick which accounts */}
+      {broadcast && (
+        <div className="border-t border-line/60 px-3 py-2">
+          <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
+            <span className="font-medium text-slate-200">
+              Send from {targets.length}/{eligible.length} {PLATFORMS[scope].label} account
+              {eligible.length === 1 ? "" : "s"}
+            </span>
+            <button onClick={() => setSelected(eligible.map((a) => a.id))} className="text-muted hover:text-slate-200">
+              Select all
+            </button>
+            <button onClick={() => setSelected([])} className="text-muted hover:text-slate-200">
+              Clear
+            </button>
+            <div className="ml-auto flex items-center gap-1.5 text-muted">
+              <span>stagger</span>
+              <input
+                type="number"
+                min={0}
+                value={stagger}
+                onChange={(e) => setStagger(Math.max(0, Number(e.target.value)))}
+                className="w-14 rounded-md border border-line bg-bg-soft px-2 py-1 text-center text-slate-100 outline-none focus:border-brand/60"
+              />
+              <span>s apart</span>
+            </div>
+          </div>
+          {eligible.length === 0 ? (
+            <p className="text-[12px] italic text-muted/70">
+              No {PLATFORMS[scope].label} accounts — add bots in the sidebar.
+            </p>
+          ) : (
+            <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto scrollbar-thin">
+              {eligible.map((a) => {
+                const on = selected.includes(a.id);
+                return (
+                  <button
+                    key={a.id}
+                    onClick={() => toggleAcc(a.id)}
+                    className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[12px] ${
+                      on ? "border-brand/60 bg-brand/10 text-slate-100" : "border-line text-muted hover:text-slate-200"
+                    }`}
+                  >
+                    <span
+                      className={`flex h-3.5 w-3.5 items-center justify-center rounded-[3px] border ${
+                        on ? "border-brand bg-brand text-brand-ink" : "border-line"
+                      }`}
+                    >
+                      {on && <IcCheck width={10} height={10} />}
+                    </span>
+                    {a.username}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* quick phrases for the active group */}
       <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2">
@@ -214,40 +321,49 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
 
       {/* message input */}
       <div className="flex items-center gap-2 px-3 pb-3 pt-1">
-        <div className="relative">
-          <button
-            onClick={() => setAcctOpen((v) => !v)}
-            disabled={eligible.length === 0}
-            className="flex w-44 items-center justify-between gap-1 rounded-lg border border-line bg-bg-soft px-2.5 py-2 text-sm text-slate-200 hover:border-brand/40 disabled:opacity-40"
-          >
-            <span className="flex min-w-0 items-center gap-1.5">
-              {sender && <PlatformBadge platform={sender.platform} />}
-              <span className="truncate">
-                {sender ? sender.username : `No ${PLATFORMS[scope].label} account`}
-              </span>
+        {broadcast ? (
+          <div className="flex w-44 items-center gap-1.5 rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-2 text-sm text-slate-200">
+            <IcUsers width={15} height={15} className="shrink-0 text-brand" />
+            <span className="truncate">
+              {targets.length} account{targets.length === 1 ? "" : "s"}
             </span>
-            <IcChevron width={14} height={14} className="shrink-0 text-muted" />
-          </button>
-          {acctOpen && eligible.length > 0 && (
-            <div className="absolute bottom-full left-0 z-20 mb-1 w-full overflow-hidden rounded-lg border border-line bg-bg-elev shadow-xl animate-fade-in">
-              {eligible.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => {
-                    setActiveAccount(a.id);
-                    setAcctOpen(false);
-                  }}
-                  className={`flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm hover:bg-white/5 ${
-                    a.id === sender?.id ? "text-brand-soft" : "text-slate-200"
-                  }`}
-                >
-                  <PlatformBadge platform={a.platform} />
-                  {a.username}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="relative">
+            <button
+              onClick={() => setAcctOpen((v) => !v)}
+              disabled={eligible.length === 0}
+              className="flex w-44 items-center justify-between gap-1 rounded-lg border border-line bg-bg-soft px-2.5 py-2 text-sm text-slate-200 hover:border-brand/40 disabled:opacity-40"
+            >
+              <span className="flex min-w-0 items-center gap-1.5">
+                {sender && <PlatformBadge platform={sender.platform} />}
+                <span className="truncate">
+                  {sender ? sender.username : `No ${PLATFORMS[scope].label} account`}
+                </span>
+              </span>
+              <IcChevron width={14} height={14} className="shrink-0 text-muted" />
+            </button>
+            {acctOpen && eligible.length > 0 && (
+              <div className="absolute bottom-full left-0 z-20 mb-1 w-full overflow-hidden rounded-lg border border-line bg-bg-elev shadow-xl animate-fade-in">
+                {eligible.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => {
+                      setActiveAccount(a.id);
+                      setAcctOpen(false);
+                    }}
+                    className={`flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm hover:bg-white/5 ${
+                      a.id === sender?.id ? "text-brand-soft" : "text-slate-200"
+                    }`}
+                  >
+                    <PlatformBadge platform={a.platform} />
+                    {a.username}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="relative flex-1">
           <input
@@ -310,7 +426,7 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
           className="flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-brand-ink hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <IcSend width={15} height={15} />
-          Send
+          {broadcast && targets.length > 1 ? `Send ×${targets.length}` : "Send"}
         </button>
       </div>
     </div>

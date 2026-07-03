@@ -117,6 +117,13 @@ export const IcKick = (p: P) => (
     <path d="M3 3h5.4v5.4h1.8V6.6h1.8V3H19v7.2h-1.8V12H15v1.8h1.8v1.8H19V21h-6V17.4h-1.8v-1.8H9.4V21H3V3Z" />
   </svg>
 );
+export const IcUsers = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
 export const IcLayers = (p: P) => (
   <svg {...base(p)}>
     <path d="m12 2 9 5-9 5-9-5 9-5Z" />
