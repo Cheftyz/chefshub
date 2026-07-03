@@ -38,10 +38,21 @@ export default {
           from: { opacity: "0", transform: "translateX(12px)" },
           to: { opacity: "1", transform: "translateX(0)" },
         },
+        glow: {
+          "0%, 100%": {
+            boxShadow:
+              "0 0 40px -14px rgba(34,224,107,0.45), 0 0 0 1px rgba(34,224,107,0.25), inset 0 0 24px -18px rgba(34,224,107,0.5)",
+          },
+          "50%": {
+            boxShadow:
+              "0 0 78px -8px rgba(34,224,107,0.7), 0 0 0 1px rgba(34,224,107,0.45), inset 0 0 30px -16px rgba(34,224,107,0.7)",
+          },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.15s ease-out",
         "slide-in": "slide-in 0.2s ease-out",
+        glow: "glow 4.5s ease-in-out infinite",
       },
     },
   },

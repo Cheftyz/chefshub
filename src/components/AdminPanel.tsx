@@ -243,6 +243,17 @@ export function AdminPanel() {
     setBusyId(null);
   };
 
+  const removeUser = async (u: User) => {
+    if (!window.confirm(`Delete ${u.displayName} (${u.email})? This permanently removes their account and bots.`))
+      return;
+    setBusyId(u.id);
+    setError(null);
+    const r = await adminDeleteUser(u.id);
+    if (!r.ok) setError(r.error || "Delete failed.");
+    await load();
+    setBusyId(null);
+  };
+
   const pendingCount = users?.filter((u) => u.status === "pending").length ?? 0;
 
   return (
@@ -345,6 +356,15 @@ export function AdminPanel() {
                           >
                             <IcEdit width={13} height={13} /> Edit
                           </button>
+                          {!u.isAdmin && (
+                            <button
+                              onClick={() => removeUser(u)}
+                              title="Delete account"
+                              className="flex items-center justify-center rounded-md border border-line p-1.5 text-muted hover:border-red-500/40 hover:text-red-400"
+                            >
+                              <IcTrash width={13} height={13} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

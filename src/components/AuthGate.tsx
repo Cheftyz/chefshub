@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "../lib/auth";
+import { MatrixRain } from "./MatrixRain";
 import { IcSpinner } from "./Icons";
 
 const input =
@@ -12,13 +13,16 @@ type Mode = "login" | "signup" | "forgot" | "reset";
 
 function Shell({ subtitle, children }: { subtitle: string; children: ReactNode }) {
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-bg px-4 text-slate-200">
-      <div className="w-full max-w-sm rounded-2xl border border-line bg-bg-panel p-7 shadow-2xl">
+    <div className="relative flex h-screen w-screen items-center justify-center overflow-hidden bg-bg px-4 text-slate-200">
+      <MatrixRain />
+      {/* soft dark vignette so the card stays readable over the rain */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_20%,rgba(10,11,12,0.82)_75%)]" />
+      <div className="animate-glow relative z-10 w-full max-w-sm rounded-2xl border border-brand/30 bg-bg-panel/85 p-7 backdrop-blur-md">
         <div className="mb-6 flex flex-col items-center text-center">
           <img
             src={`${import.meta.env.BASE_URL}logo.svg`}
             alt=""
-            className="mb-3 h-14 w-14 drop-shadow-[0_8px_24px_rgba(34,224,107,0.35)]"
+            className="mb-3 h-14 w-14 drop-shadow-[0_8px_24px_rgba(34,224,107,0.45)]"
           />
           <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-100">
             MB <span className="text-brand">Chatters</span>
