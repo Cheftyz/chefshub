@@ -15,9 +15,11 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "https-proxy-agent": "^7.0.6",
     "nodemailer": "^6.9.16",
     "pg": "^8.13.1",
     "undici": "^6.21.0",
+    "ws": "^8.18.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.5"

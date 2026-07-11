@@ -12,6 +12,7 @@ import { hashPassword, verifyPassword, makeToken, verifyToken, genOtp, isValidEm
 import { sendResetCode, mailerConfigured } from "./mailer.mjs";
 import { resolveChannel, sendMessage } from "./kick.mjs";
 import { twitchLive, kickLive } from "./live.mjs";
+import { twitchSend } from "./twitch-send.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, "..");
@@ -437,6 +438,23 @@ app.post("/kick/send", async (req, res) => {
   if (!req.body?.token || !req.body?.content) return res.status(400).json({ ok: false, error: "missing token/content" });
   const result = await sendMessage(req.body);
   res.status(result.ok ? 200 : 502).json(result);
+});
+
+// server-side Twitch send through a bot's proxy (uses the bot's stored token)
+app.post("/api/twitch/send", auth, (req, res) => {
+  const { botId, channel, text } = req.body || {};
+  const bot = ensureBots(req.user).find((b) => b.id === botId);
+  if (!bot || bot.platform !== "twitch") return res.status(400).json({ ok: false, error: "twitch bot not found" });
+  if (!channel || !text) return res.status(400).json({ ok: false, error: "missing channel/text" });
+  const r = twitchSend({
+    botId: bot.id,
+    username: bot.username,
+    token: bot.token,
+    proxy: bot.proxy || "",
+    channel,
+    text,
+  });
+  res.json(r);
 });
 
 // live channel info (is-live / viewers / title)

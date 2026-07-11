@@ -1,5 +1,6 @@
 import { TwitchConnection } from "./twitch";
 import { KickPusher, sendKick } from "./kick";
+import { twitchSendViaServer } from "./twitchsend";
 import type { Account, Channel } from "./types";
 import { channelId } from "./types";
 import { useStore } from "./store";
@@ -154,10 +155,16 @@ class ChatManager {
   // ------------------------------ send ----------------------------
   send(account: Account, channel: Channel, text: string): boolean {
     if (account.platform === "twitch") {
-      const conn = this.twitch.get(account.id);
-      const ok = conn ? conn.say(channel.name, text) : false;
       this.markSelf(channel.id, account.username, text);
-      return ok;
+      // proxied bots send server-side (through the proxy); others send from the browser
+      if (account.proxy) {
+        void twitchSendViaServer(account.id, channel.name, text).then((r) => {
+          if (!r.ok) useStore.getState().pushSystem(channel.id, `Twitch send failed: ${r.error}`);
+        });
+        return true;
+      }
+      const conn = this.twitch.get(account.id);
+      return conn ? conn.say(channel.name, text) : false;
     }
     // kick — fire over the proxy, mark self so the pusher echo is de-duped
     this.markSelf(channel.id, account.username, text);
