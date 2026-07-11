@@ -66,5 +66,53 @@ export interface Scheduled {
 
 export type ConnState = "idle" | "connecting" | "open" | "closed" | "error";
 
+// ---- tools (persisted per user on the server) ----
+export interface Command {
+  id: string;
+  trigger: string; // e.g. "!discord"
+  response: string;
+  cooldown: number; // seconds
+  enabled: boolean;
+}
+export interface Timer {
+  id: string;
+  name: string;
+  message: string;
+  intervalMin: number;
+  enabled: boolean;
+}
+export interface Quote {
+  id: string;
+  text: string;
+  author: string;
+  addedAt: number;
+}
+export type ToolKind = "commands" | "timers" | "quotes";
+
+// ---- live / client-only ----
+export interface GiveawayState {
+  active: boolean;
+  keyword: string;
+  channelId: string | null;
+  entrants: string[];
+  winner: string | null;
+}
+export interface ActivityEvent {
+  id: string;
+  ts: number;
+  kind: "sent" | "command" | "timer" | "giveaway" | "system";
+  text: string;
+}
+
+export type NavPage =
+  | "dashboard"
+  | "activity"
+  | "chat"
+  | "commands"
+  | "timers"
+  | "quotes"
+  | "giveaways"
+  | "admin";
+
 export const channelId = (platform: Platform, name: string) =>
   `${platform}:${name.toLowerCase().replace(/^#/, "")}`;

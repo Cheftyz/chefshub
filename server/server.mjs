@@ -11,6 +11,7 @@ import { db, save, uid, initDb, storageKind, findUserByEmail, findUserById, list
 import { hashPassword, verifyPassword, makeToken, verifyToken, genOtp, isValidEmail } from "./authcore.mjs";
 import { sendResetCode, mailerConfigured } from "./mailer.mjs";
 import { resolveChannel, sendMessage } from "./kick.mjs";
+import { twitchLive, kickLive } from "./live.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, "..");
@@ -300,6 +301,39 @@ app.delete("/api/admin/users/:id/bots/:botId", auth, adminOnly, async (req, res)
   res.json({ ok: true });
 });
 
+// -------------------- tool collections (commands / timers / quotes) --------------------
+const TOOL_KINDS = new Set(["commands", "timers", "quotes"]);
+const ensureCol = (u, kind) => {
+  if (!Array.isArray(u[kind])) u[kind] = [];
+  return u[kind];
+};
+app.get("/api/me/:kind", auth, (req, res, next) => {
+  if (!TOOL_KINDS.has(req.params.kind)) return next();
+  res.json({ items: ensureCol(req.user, req.params.kind) });
+});
+app.post("/api/me/:kind", auth, async (req, res, next) => {
+  if (!TOOL_KINDS.has(req.params.kind)) return next();
+  const item = { ...req.body, id: uid() };
+  ensureCol(req.user, req.params.kind).push(item);
+  await save();
+  res.json({ ok: true, item });
+});
+app.post("/api/me/:kind/:id", auth, async (req, res, next) => {
+  if (!TOOL_KINDS.has(req.params.kind)) return next();
+  const col = ensureCol(req.user, req.params.kind);
+  const item = col.find((x) => x.id === req.params.id);
+  if (!item) return res.status(404).json({ error: "not found" });
+  Object.assign(item, req.body, { id: item.id });
+  await save();
+  res.json({ ok: true, item });
+});
+app.delete("/api/me/:kind/:id", auth, async (req, res, next) => {
+  if (!TOOL_KINDS.has(req.params.kind)) return next();
+  req.user[req.params.kind] = ensureCol(req.user, req.params.kind).filter((x) => x.id !== req.params.id);
+  await save();
+  res.json({ ok: true });
+});
+
 // -------------------- message groups (phrase presets per game) --------------------
 function ensureGroups(u) {
   if (!Array.isArray(u.groups)) u.groups = [];
@@ -353,6 +387,10 @@ app.post("/kick/send", async (req, res) => {
   const result = await sendMessage(req.body);
   res.status(result.ok ? 200 : 502).json(result);
 });
+
+// live channel info (is-live / viewers / title)
+app.get("/api/live/twitch/:login", auth, async (req, res) => res.json(await twitchLive(req.params.login)));
+app.get("/api/live/kick/:slug", auth, async (req, res) => res.json(await kickLive(req.params.slug)));
 
 app.get("/api/health", (_req, res) =>
   res.json({ ok: true, storage: storageKind(), mailer: mailerConfigured ? "smtp" : "console" })

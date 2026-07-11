@@ -137,3 +137,53 @@ export const IcShield = (p: P) => (
     <path d="m9 12 2 2 4-4" />
   </svg>
 );
+export const IcHome = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 10.5 12 3l9 7.5" />
+    <path d="M5 9.5V21h14V9.5" />
+    <path d="M9 21v-6h6v6" />
+  </svg>
+);
+export const IcActivity = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 12h4l3 8 4-16 3 8h4" />
+  </svg>
+);
+export const IcTerminal = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m4 17 6-5-6-5" />
+    <path d="M12 19h8" />
+  </svg>
+);
+export const IcAlarm = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="13" r="8" />
+    <path d="M12 9v4l2.5 2.5M5 3 2 6M22 6l-3-3" />
+  </svg>
+);
+export const IcQuote = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M6 17h3l2-4V7H5v6h3zM16 17h3l2-4V7h-6v6h3z" />
+  </svg>
+);
+export const IcGift = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M20 12v9H4v-9M2 7h20v5H2zM12 22V7M12 7S10.5 3 8.5 3 6 5 6 6s1 1 2.5 1M12 7s1.5-4 3.5-4S18 5 18 6s-1 1-2.5 1" />
+  </svg>
+);
+export const IcBell = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" />
+  </svg>
+);
+export const IcSettings = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+  </svg>
+);
+export const IcSparkle = (p: P) => (
+  <svg {...base(p)} fill="currentColor" stroke="none">
+    <path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8z" />
+  </svg>
+);

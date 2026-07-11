@@ -65,6 +65,7 @@ class ChatManager {
           ts: m.ts,
           self: isOwn,
         });
+        if (!isOwn) useStore.getState().handleIncoming(cId, m.username, m.text);
       },
     });
     this.twitch.set(account.id, conn);
@@ -93,6 +94,7 @@ class ChatManager {
           ts: m.ts,
           self: isOwn,
         });
+        if (!isOwn) useStore.getState().handleIncoming(cId, m.username, m.text);
       },
     });
     return this.kick;

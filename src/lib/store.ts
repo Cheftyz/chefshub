@@ -1,13 +1,32 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Account, ChatMessage, Channel, ConnState, Phrase, PhraseGroup, Platform, Scheduled } from "./types";
+import type {
+  Account,
+  ChatMessage,
+  Channel,
+  ConnState,
+  Phrase,
+  PhraseGroup,
+  Platform,
+  Scheduled,
+  Command,
+  Timer,
+  Quote,
+  ToolKind,
+  GiveawayState,
+  ActivityEvent,
+  NavPage,
+} from "./types";
 import { channelId } from "./types";
 import { chat } from "./chat";
 import { resolveKickChannel } from "./kick";
 import { listMyBots, addMyBot, updateMyBot, deleteMyBot } from "./bots";
 import { listGroups, saveGroups } from "./groups";
+import { listItems, addItem, updateItem, deleteItem } from "./tools";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+const cmdCooldown = new Map<string, number>();
+const timerLastRun = new Map<string, number>();
 
 const NAME_COLORS = [
   "#ff4a80", "#8b5cf6", "#22c55e", "#f59e0b", "#38bdf8",
@@ -42,8 +61,36 @@ interface State {
   conn: Record<string, ConnInfo>;
   kickRead: ConnInfo;
 
+  // tools + dashboard
+  page: NavPage;
+  commands: Command[];
+  timers: Timer[];
+  quotes: Quote[];
+  giveaway: GiveawayState;
+  activity: ActivityEvent[];
+
   // navigation
   setView: (platform: Platform) => void;
+  setPage: (p: NavPage) => void;
+
+  // tools (commands/timers/quotes) — stored on the server per user
+  loadTools: () => Promise<void>;
+  clearTools: () => void;
+  addTool: (kind: ToolKind, item: Record<string, unknown>) => Promise<void>;
+  updateTool: (kind: ToolKind, id: string, patch: Record<string, unknown>) => Promise<void>;
+  deleteTool: (kind: ToolKind, id: string) => Promise<void>;
+
+  // giveaways (live)
+  startGiveaway: (keyword: string) => void;
+  stopGiveaway: () => void;
+  drawWinner: () => void;
+  resetGiveaway: () => void;
+
+  // activity + engine hooks
+  pushActivity: (kind: ActivityEvent["kind"], text: string) => void;
+  respondFromChannel: (channelId: string, text: string) => boolean;
+  handleIncoming: (channelId: string, username: string, text: string) => void;
+  runTimers: () => void;
 
   // accounts ("bots") — stored on the server per user
   loadBots: () => Promise<void>;
@@ -114,6 +161,127 @@ export const useStore = create<State>()(
       scheduled: [],
       conn: {},
       kickRead: { state: "idle" },
+
+      page: "dashboard",
+      commands: [],
+      timers: [],
+      quotes: [],
+      giveaway: { active: false, keyword: "", channelId: null, entrants: [], winner: null },
+      activity: [],
+
+      setPage: (p) => set({ page: p }),
+
+      loadTools: async () => {
+        const [commands, timers, quotes] = await Promise.all([
+          listItems<Command>("commands"),
+          listItems<Timer>("timers"),
+          listItems<Quote>("quotes"),
+        ]);
+        set({ commands, timers, quotes });
+      },
+      clearTools: () => set({ commands: [], timers: [], quotes: [] }),
+      addTool: async (kind, item) => {
+        const created = await addItem(kind, item);
+        if (created) set((s) => ({ [kind]: [...(s[kind] as unknown[]), created] } as unknown as Partial<State>));
+      },
+      updateTool: async (kind, id, patch) => {
+        set((s) => ({
+          [kind]: (s[kind] as { id: string }[]).map((x) => (x.id === id ? { ...x, ...patch } : x)),
+        } as unknown as Partial<State>));
+        await updateItem(kind, id, patch);
+      },
+      deleteTool: async (kind, id) => {
+        set((s) => ({
+          [kind]: (s[kind] as { id: string }[]).filter((x) => x.id !== id),
+        } as unknown as Partial<State>));
+        await deleteItem(kind, id);
+      },
+
+      startGiveaway: (keyword) => {
+        const kw = keyword.trim() || "!enter";
+        set({
+          giveaway: { active: true, keyword: kw, channelId: get().activeChannelId, entrants: [], winner: null },
+        });
+        get().pushActivity("giveaway", `Giveaway started — type ${kw} to enter`);
+      },
+      stopGiveaway: () => set((s) => ({ giveaway: { ...s.giveaway, active: false } })),
+      drawWinner: () => {
+        const e = get().giveaway.entrants;
+        if (!e.length) return;
+        const w = e[Math.floor(Math.random() * e.length)];
+        set((s) => ({ giveaway: { ...s.giveaway, winner: w, active: false } }));
+        get().pushActivity("giveaway", `Winner drawn: ${w}`);
+      },
+      resetGiveaway: () =>
+        set({ giveaway: { active: false, keyword: "", channelId: null, entrants: [], winner: null } }),
+
+      pushActivity: (kind, text) =>
+        set((s) => ({ activity: [{ id: uid(), ts: Date.now(), kind, text }, ...s.activity].slice(0, 150) })),
+
+      respondFromChannel: (cId, text) => {
+        const { accounts, channels } = get();
+        const channel = channels.find((c) => c.id === cId);
+        if (!channel || !text.trim()) return false;
+        const pool = accounts.filter((a) => a.visible && a.token && a.platform === channel.platform);
+        if (!pool.length) return false;
+        const acc = pool[Math.floor(Math.random() * pool.length)];
+        chat.send(acc, channel, text);
+        get().pushMessage({
+          id: uid(),
+          channelId: channel.id,
+          username: acc.username,
+          displayName: acc.username,
+          color: colorFor(acc.username),
+          text,
+          ts: Date.now(),
+          self: true,
+        });
+        return true;
+      },
+
+      handleIncoming: (cId, username, text) => {
+        const t = text.trim();
+        const low = t.toLowerCase();
+        // giveaway entry
+        const g = get().giveaway;
+        if (g.active && g.channelId === cId && low === g.keyword.trim().toLowerCase()) {
+          if (!g.entrants.includes(username)) {
+            set((s) => ({ giveaway: { ...s.giveaway, entrants: [...s.giveaway.entrants, username] } }));
+          }
+          return;
+        }
+        // built-in !quote
+        if (low === "!quote") {
+          const qs = get().quotes;
+          if (qs.length) {
+            const q = qs[Math.floor(Math.random() * qs.length)];
+            if (get().respondFromChannel(cId, `"${q.text}"${q.author ? ` — ${q.author}` : ""}`))
+              get().pushActivity("command", `!quote answered`);
+          }
+          return;
+        }
+        // custom commands
+        const cmd = get().commands.find((c) => c.enabled && low.startsWith(c.trigger.trim().toLowerCase()));
+        if (cmd) {
+          const now = Date.now();
+          if (now - (cmdCooldown.get(cmd.id) ?? 0) < (cmd.cooldown || 0) * 1000) return;
+          cmdCooldown.set(cmd.id, now);
+          if (get().respondFromChannel(cId, cmd.response)) get().pushActivity("command", `${cmd.trigger} triggered`);
+        }
+      },
+
+      runTimers: () => {
+        const { timers, activeChannelId } = get();
+        if (!activeChannelId) return;
+        const now = Date.now();
+        for (const tm of timers) {
+          if (!tm.enabled) continue;
+          if (now - (timerLastRun.get(tm.id) ?? 0) < Math.max(1, tm.intervalMin || 5) * 60000) continue;
+          timerLastRun.set(tm.id, now);
+          if (get().respondFromChannel(activeChannelId, tm.message))
+            get().pushActivity("timer", `Timer "${tm.name}" posted`);
+        }
+      },
 
       setView: (platform) => {
         const { channels, activeChannelId, accounts, activeAccountId } = get();
@@ -292,6 +460,7 @@ export const useStore = create<State>()(
           ts: Date.now(),
           self: true,
         });
+        get().pushActivity("sent", `${acc.username} → ${channel.name}: ${text.slice(0, 60)}`);
         return ok;
       },
       schedule: (accountId, text, delaySec) => {
@@ -390,6 +559,7 @@ export const useStore = create<State>()(
       migrate: (persisted, version) => (version < 1 ? (undefined as unknown as State) : (persisted as State)),
       partialize: (s) => ({
         view: s.view,
+        page: s.page,
         // accounts (bots) and groups are NOT persisted locally — they live on the server
         activeAccountId: s.activeAccountId,
         activeGroupId: s.activeGroupId,

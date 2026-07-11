@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useStore, colorFor } from "../lib/store";
 import { PLATFORMS, PlatformBadge } from "./platform";
 import { IcMessage } from "./Icons";
+import { fetchLive, formatViewers, type LiveInfo } from "../lib/live";
 import type { ChatMessage } from "../lib/types";
 
 function timeStr(ts: number) {
@@ -18,13 +19,38 @@ export function ChatArea() {
   const conn = useStore((s) => s.conn);
   const kickRead = useStore((s) => s.kickRead);
 
+  const active = channels.find((c) => c.id === activeChannelId) ?? channels[0];
+
   const endRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages?.length, activeChannelId]);
 
+  // poll live channel info (viewers / title / is-live)
+  const [live, setLive] = useState<LiveInfo | null>(null);
+  const activePlatform = active?.platform;
+  const activeName = active?.name;
+  useEffect(() => {
+    if (!activePlatform || !activeName) {
+      setLive(null);
+      return;
+    }
+    let cancelled = false;
+    setLive(null);
+    const load = async () => {
+      const d = await fetchLive(activePlatform, activeName);
+      if (!cancelled) setLive(d);
+    };
+    load();
+    const t = setInterval(load, 45000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [activePlatform, activeName]);
+
   // ---- no channels at all: full-area prompt ----
-  if (channels.length === 0) {
+  if (channels.length === 0 || !active) {
     const label = PLATFORMS[view].label;
     return (
       <div className="flex flex-1 items-center justify-center p-3">
@@ -39,7 +65,6 @@ export function ChatArea() {
     );
   }
 
-  const active = channels.find((c) => c.id === activeChannelId) ?? channels[0];
   const chAccounts = accounts.filter((a) => a.platform === active.platform && a.token);
 
   // connection status for the active channel
@@ -60,24 +85,44 @@ export function ChatArea() {
   const openUrl =
     active.platform === "twitch" ? `https://twitch.tv/${active.name}` : `https://kick.com/${active.name}`;
 
+  const isLive = live?.live === true;
+  const subtitle = isLive
+    ? live?.title || (live?.game ? `Playing ${live.game}` : "")
+    : live?.live === false
+    ? "Offline"
+    : "";
+
   const list = messages ?? [];
   const hasContent = list.some((m) => !m.system);
 
   return (
     <div className="flex flex-1 flex-col gap-3 overflow-hidden p-3">
       {/* channel info header */}
-      <header className="flex h-12 shrink-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 backdrop-blur-2xl">
-        <PlatformBadge platform={active.platform} size={18} />
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-display text-[15px] font-semibold text-slate-100">{active.name}</span>
-          <span className="flex items-center gap-1.5 text-[12px] text-muted">
-            <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-            {statusText}
-          </span>
+      <header className="flex h-16 shrink-0 items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 backdrop-blur-2xl">
+        <PlatformBadge platform={active.platform} size={20} />
+        <div className="flex min-w-0 flex-1 flex-col justify-center">
+          <div className="flex items-center gap-2">
+            <span className="truncate font-display text-[15px] font-semibold text-slate-100">{active.name}</span>
+            {isLive ? (
+              <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-400">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                LIVE
+                {live?.viewers != null && (
+                  <span className="font-medium text-red-300/90">· {formatViewers(live.viewers)}</span>
+                )}
+              </span>
+            ) : (
+              <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-muted">
+                <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+                {statusText}
+              </span>
+            )}
+          </div>
+          {subtitle && <span className="truncate text-[12px] text-muted">{subtitle}</span>}
         </div>
 
         {channels.length > 1 && (
-          <div className="ml-2 flex items-center gap-1 overflow-x-auto scrollbar-thin">
+          <div className="flex shrink-0 items-center gap-1 overflow-x-auto scrollbar-thin">
             {channels.map((c) => (
               <button
                 key={c.id}
@@ -96,7 +141,7 @@ export function ChatArea() {
           href={openUrl}
           target="_blank"
           rel="noreferrer"
-          className="ml-auto shrink-0 rounded-lg border border-white/10 px-2.5 py-1 text-[12px] font-medium text-muted hover:border-brand/40 hover:text-brand-soft"
+          className="shrink-0 rounded-lg border border-white/10 px-2.5 py-1 text-[12px] font-medium text-muted hover:border-brand/40 hover:text-brand-soft"
         >
           Open ↗
         </a>
