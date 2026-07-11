@@ -11,6 +11,8 @@ export interface Account {
   token: string;
   /** whether this account is used for auto-send / shows in dropdown */
   visible: boolean;
+  /** optional per-bot proxy (used for Kick server-side sends) */
+  proxy?: string;
 }
 
 export interface Channel {

@@ -76,8 +76,23 @@ function ensureBots(u) {
   if (!Array.isArray(u.bots)) u.bots = [];
   return u.bots;
 }
-const ownBot = (b) => ({ id: b.id, platform: b.platform, username: b.username, token: b.token, visible: b.visible !== false });
+const ownBot = (b) => ({
+  id: b.id,
+  platform: b.platform,
+  username: b.username,
+  token: b.token,
+  visible: b.visible !== false,
+  proxy: b.proxy || "",
+});
 const adminBot = (b) => ({ id: b.id, platform: b.platform, username: b.username, visible: b.visible !== false }); // no token
+// find any bot across all users (admin)
+function findBotGlobal(botId) {
+  for (const u of db().users) {
+    const bot = ensureBots(u).find((b) => b.id === botId);
+    if (bot) return { user: u, bot };
+  }
+  return null;
+}
 function makeBot(body) {
   const platform = body?.platform === "kick" ? "kick" : "twitch";
   const username = String(body?.username || "").trim().toLowerCase();
@@ -297,6 +312,42 @@ app.delete("/api/admin/users/:id/bots/:botId", auth, adminOnly, async (req, res)
   const u = findUserById(req.params.id);
   if (!u) return res.status(404).json({ error: "user not found" });
   u.bots = ensureBots(u).filter((b) => b.id !== req.params.botId);
+  await save();
+  res.json({ ok: true });
+});
+
+// -------------------- admin: every bot on the site --------------------
+app.get("/api/admin/bots", auth, adminOnly, (_req, res) => {
+  const all = [];
+  for (const u of db().users) {
+    for (const b of ensureBots(u)) {
+      all.push({
+        id: b.id,
+        platform: b.platform,
+        username: b.username,
+        visible: b.visible !== false,
+        proxy: b.proxy || "",
+        ownerId: u.id,
+        ownerName: u.displayName || u.email,
+        ownerEmail: u.email,
+      });
+    }
+  }
+  all.sort((a, b) => a.ownerName.localeCompare(b.ownerName) || a.username.localeCompare(b.username));
+  res.json({ bots: all });
+});
+app.post("/api/admin/bots/:botId", auth, adminOnly, async (req, res) => {
+  const found = findBotGlobal(req.params.botId);
+  if (!found) return res.status(404).json({ error: "bot not found" });
+  if (req.body?.proxy !== undefined) found.bot.proxy = String(req.body.proxy).trim();
+  if (req.body?.visible !== undefined) found.bot.visible = !!req.body.visible;
+  await save();
+  res.json({ ok: true });
+});
+app.delete("/api/admin/bots/:botId", auth, adminOnly, async (req, res) => {
+  const found = findBotGlobal(req.params.botId);
+  if (!found) return res.status(404).json({ error: "bot not found" });
+  found.user.bots = ensureBots(found.user).filter((b) => b.id !== req.params.botId);
   await save();
   res.json({ ok: true });
 });

@@ -17,7 +17,13 @@ import {
   IcUsers,
 } from "./Icons";
 
-const EMOJIS = ["😂", "💀", "🔥", "🗿", "😭", "👍", "❤️", "🎉", "😎", "🤡", "👀", "🐐", "LULW", "KEKW", "Pog", "GG"];
+const EMOJIS = ["😂", "💀", "🔥", "🗿", "😭", "👍", "❤️", "🎉", "😎", "🤡", "👀", "🐐"];
+// global Twitch emotes — render for everyone when sent as text
+const TWITCH_EMOTES = [
+  "Kappa", "PogChamp", "LUL", "Kreygasm", "4Head", "BibleThump", "SeemsGood", "NotLikeThis",
+  "WutFace", "DansGame", "cmonBruh", "Jebaited", "KappaPride", "TriHard", "VoHiYo", "HeyGuys",
+  "EleGiggle", "FailFish", "ResidentSleeper", "SwiftRage", "BabyRage", "PJSalt", "MrDestructoid", "CoolCat",
+];
 
 export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
   const accounts = useStore((s) => s.accounts);
@@ -42,6 +48,7 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
   const [text, setText] = useState("");
   const [now, setNow] = useState(Date.now());
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [pickerTab, setPickerTab] = useState<"emoji" | "twitch">("emoji");
   const [acctOpen, setAcctOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [broadcast, setBroadcast] = useState(false);
@@ -393,20 +400,52 @@ export function Composer({ onEditPhrases }: { onEditPhrases: () => void }) {
             <IcEmoji width={16} height={16} />
           </button>
           {emojiOpen && (
-            <div className="absolute bottom-full right-0 z-20 mb-1 grid w-56 grid-cols-6 gap-1 rounded-lg border border-line bg-bg-elev p-2 shadow-xl animate-fade-in">
-              {EMOJIS.map((e) => (
-                <button
-                  key={e}
-                  onClick={() => {
-                    setText((t) => t + (e.length > 2 ? ` ${e} ` : e));
-                    setEmojiOpen(false);
-                    inputRef.current?.focus();
-                  }}
-                  className="rounded p-1 text-center text-sm hover:bg-white/10"
-                >
-                  {e}
-                </button>
-              ))}
+            <div className="absolute bottom-full right-0 z-20 mb-1 w-64 rounded-xl border border-white/10 bg-bg-elev/90 p-2 shadow-card backdrop-blur-2xl animate-fade-in">
+              <div className="mb-2 flex gap-1 rounded-lg bg-white/[0.03] p-0.5 text-[12px]">
+                {(["emoji", "twitch"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setPickerTab(t)}
+                    className={`flex-1 rounded-md py-1 font-medium ${
+                      pickerTab === t ? "bg-white/[0.07] text-slate-100" : "text-muted hover:text-slate-200"
+                    }`}
+                  >
+                    {t === "emoji" ? "Emoji" : "Twitch emotes"}
+                  </button>
+                ))}
+              </div>
+              {pickerTab === "emoji" ? (
+                <div className="grid grid-cols-6 gap-1">
+                  {EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      onClick={() => {
+                        setText((t) => t + e);
+                        inputRef.current?.focus();
+                      }}
+                      className="rounded p-1 text-center text-lg hover:bg-white/10"
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid max-h-44 grid-cols-3 gap-1 overflow-y-auto scrollbar-thin">
+                  {TWITCH_EMOTES.map((e) => (
+                    <button
+                      key={e}
+                      onClick={() => {
+                        setText((t) => (t.endsWith(" ") || t === "" ? t : t + " ") + e + " ");
+                        inputRef.current?.focus();
+                      }}
+                      className="truncate rounded px-1.5 py-1 text-center text-[11px] font-medium text-slate-200 hover:bg-brand/15 hover:text-brand-soft"
+                      title={`Insert ${e}`}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

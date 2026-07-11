@@ -45,6 +45,7 @@ export async function sendKick(opts: {
   chatroomId?: number;
   broadcasterUserId?: number;
   content: string;
+  proxy?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch(`${proxyBase()}/kick/send`, {

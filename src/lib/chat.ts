@@ -166,6 +166,7 @@ class ChatManager {
       chatroomId: channel.kickChatroomId,
       broadcasterUserId: channel.kickBroadcasterId,
       content: text,
+      proxy: account.proxy,
     }).then((r) => {
       if (!r.ok) useStore.getState().pushSystem(channel.id, `Kick send failed: ${r.error}`);
     });

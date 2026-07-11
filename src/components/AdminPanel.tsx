@@ -10,7 +10,11 @@ import {
   adminListBots,
   adminAddBot,
   adminDeleteBot,
+  adminListAllBots,
+  adminSetBotProxy,
+  adminDeleteBotGlobal,
   type AdminBot,
+  type AdminGlobalBot,
 } from "../lib/admin";
 import { Modal } from "./Modal";
 import { PLATFORMS, PlatformBadge } from "./platform";
@@ -223,6 +227,35 @@ function UserDialog({ editing, onClose, onSaved }: { editing: Editing; onClose: 
 }
 
 export function AdminPanel() {
+  const [tab, setTab] = useState<"users" | "bots">("users");
+  return (
+    <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-thin">
+      <div className="mx-auto max-w-4xl">
+        <div className="mb-5 flex items-center gap-1 rounded-xl border border-white/5 bg-white/[0.02] p-1">
+          <button
+            onClick={() => setTab("users")}
+            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium ${
+              tab === "users" ? "bg-white/[0.06] text-slate-100" : "text-muted hover:text-slate-200"
+            }`}
+          >
+            User accounts
+          </button>
+          <button
+            onClick={() => setTab("bots")}
+            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium ${
+              tab === "bots" ? "bg-white/[0.06] text-slate-100" : "text-muted hover:text-slate-200"
+            }`}
+          >
+            All bots
+          </button>
+        </div>
+        {tab === "users" ? <UsersPanel /> : <AllBotsPanel />}
+      </div>
+    </div>
+  );
+}
+
+function UsersPanel() {
   const me = useAuth((s) => s.user);
   const [users, setUsers] = useState<User[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -257,10 +290,9 @@ export function AdminPanel() {
   const pendingCount = users?.filter((u) => u.status === "pending").length ?? 0;
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-thin">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-1 flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-slate-100">User accounts</h1>
+    <>
+      <div className="mb-1 flex items-center gap-3">
+        <h1 className="text-lg font-semibold text-slate-100">User accounts</h1>
           {pendingCount > 0 && (
             <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-400">
               {pendingCount} awaiting approval
@@ -374,7 +406,6 @@ export function AdminPanel() {
             </table>
           </div>
         )}
-      </div>
 
       {editing && (
         <UserDialog
@@ -389,6 +420,109 @@ export function AdminPanel() {
           }}
         />
       )}
-    </div>
+    </>
+  );
+}
+
+function AllBotsPanel() {
+  const [bots, setBots] = useState<AdminGlobalBot[] | null>(null);
+  const [proxies, setProxies] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const load = async () => {
+    const list = await adminListAllBots();
+    setBots(list);
+    setProxies(Object.fromEntries(list.map((b) => [b.id, b.proxy])));
+  };
+  useEffect(() => {
+    load();
+  }, []);
+
+  const saveProxy = async (b: AdminGlobalBot) => {
+    setSavingId(b.id);
+    await adminSetBotProxy(b.id, proxies[b.id] || "");
+    setSavingId(null);
+    await load();
+  };
+  const remove = async (b: AdminGlobalBot) => {
+    if (!window.confirm(`Delete bot "${b.username}" owned by ${b.ownerName}?`)) return;
+    await adminDeleteBotGlobal(b.id);
+    await load();
+  };
+
+  return (
+    <>
+      <h1 className="text-lg font-semibold text-slate-100">All bots</h1>
+      <p className="mb-5 mt-0.5 text-[13px] text-muted">
+        Every Twitch/Kick bot on the site and whose account it's on. Set a proxy per bot (applied to Kick sends).
+      </p>
+
+      {bots === null ? (
+        <div className="flex items-center gap-2 py-10 text-muted">
+          <IcSpinner width={18} height={18} /> Loading bots…
+        </div>
+      ) : bots.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted">No bots on any account yet.</p>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20 backdrop-blur-2xl">
+          <table className="w-full text-sm">
+            <thead className="bg-white/[0.03] text-[11px] uppercase tracking-wider text-muted">
+              <tr>
+                <th className="px-4 py-2.5 text-left font-semibold">Bot</th>
+                <th className="px-4 py-2.5 text-left font-semibold">On account</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Proxy</th>
+                <th className="px-4 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {bots.map((b) => {
+                const dirty = (proxies[b.id] || "") !== (b.proxy || "");
+                return (
+                  <tr key={b.id} className="border-t border-line">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <PlatformBadge platform={b.platform} />
+                        <span className="font-medium text-slate-200">{b.username}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-[13px] text-slate-200">{b.ownerName}</div>
+                      <div className="text-[12px] text-muted">{b.ownerEmail}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          className="w-56 rounded-lg border border-line bg-bg-soft px-2.5 py-1.5 font-mono text-[12px] text-slate-100 outline-none focus:border-brand/60"
+                          placeholder="http://user:pass@host:port"
+                          value={proxies[b.id] ?? ""}
+                          onChange={(e) => setProxies((p) => ({ ...p, [b.id]: e.target.value }))}
+                          onKeyDown={(e) => e.key === "Enter" && saveProxy(b)}
+                        />
+                        <button
+                          onClick={() => saveProxy(b)}
+                          disabled={!dirty || savingId === b.id}
+                          className="rounded-md bg-brand px-2.5 py-1.5 text-[12px] font-semibold text-brand-ink hover:bg-brand/90 disabled:opacity-40"
+                        >
+                          {savingId === b.id ? "…" : "Save"}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => remove(b)}
+                        title="Delete bot"
+                        className="rounded-md border border-line p-1.5 text-muted hover:border-red-500/40 hover:text-red-400"
+                      >
+                        <IcTrash width={14} height={14} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }

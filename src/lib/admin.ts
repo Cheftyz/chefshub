@@ -90,3 +90,35 @@ export async function adminDeleteBot(userId: string, botId: string): Promise<{ o
   });
   return r.json().catch(() => ({ ok: false }));
 }
+
+// ---- every bot on the site (admin), with owner + proxy ----
+export interface AdminGlobalBot {
+  id: string;
+  platform: "twitch" | "kick";
+  username: string;
+  visible: boolean;
+  proxy: string;
+  ownerId: string;
+  ownerName: string;
+  ownerEmail: string;
+}
+export async function adminListAllBots(): Promise<AdminGlobalBot[]> {
+  const r = await fetch("/api/admin/bots", { headers: { authorization: `Bearer ${token()}` } });
+  const d = await r.json().catch(() => ({}));
+  return (d.bots as AdminGlobalBot[]) || [];
+}
+export async function adminSetBotProxy(botId: string, proxy: string): Promise<{ ok: boolean }> {
+  const r = await fetch(`/api/admin/bots/${botId}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token()}` },
+    body: JSON.stringify({ proxy }),
+  });
+  return r.json().catch(() => ({ ok: false }));
+}
+export async function adminDeleteBotGlobal(botId: string): Promise<{ ok: boolean }> {
+  const r = await fetch(`/api/admin/bots/${botId}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token()}` },
+  });
+  return r.json().catch(() => ({ ok: false }));
+}
