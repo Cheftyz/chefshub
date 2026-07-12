@@ -118,7 +118,10 @@ class ChatManager {
     for (const acc of accounts) {
       if (!wantTwitch.has(acc.id)) continue;
       const conn = this.ensureTwitch(acc);
-      for (const ch of twitchChannels) conn.join(ch);
+      // each account views only the channels connected to it; with none set it
+      // falls back to every twitch channel that's been added.
+      const assigned = acc.channels && acc.channels.length ? acc.channels : twitchChannels;
+      conn.syncChannels(assigned.map((c) => c.toLowerCase().replace(/^#/, "")));
     }
 
     // Kick accounts have no socket of their own — reflect token presence as status

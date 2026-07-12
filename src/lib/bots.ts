@@ -33,7 +33,7 @@ export async function addMyBot(bot: {
 }
 export async function updateMyBot(
   id: string,
-  patch: { visible?: boolean; username?: string; token?: string }
+  patch: { visible?: boolean; username?: string; token?: string; proxy?: string; channels?: string[] }
 ): Promise<{ ok: boolean; bot?: Account }> {
   const { ok, data } = await api(`/me/bots/${id}`, "POST", patch);
   return { ok, bot: data.bot };

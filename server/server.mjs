@@ -78,6 +78,14 @@ function ensureBots(u) {
   if (!Array.isArray(u.bots)) u.bots = [];
   return u.bots;
 }
+const normChannels = (arr) =>
+  Array.from(
+    new Set(
+      (Array.isArray(arr) ? arr : [])
+        .map((c) => String(c).toLowerCase().replace(/^#/, "").trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 50);
 const ownBot = (b) => ({
   id: b.id,
   platform: b.platform,
@@ -85,6 +93,7 @@ const ownBot = (b) => ({
   token: b.token,
   visible: b.visible !== false,
   proxy: b.proxy || "",
+  channels: Array.isArray(b.channels) ? b.channels : [],
 });
 const adminBot = (b) => ({ id: b.id, platform: b.platform, username: b.username, visible: b.visible !== false }); // no token
 // find any bot across all users (admin)
@@ -286,6 +295,8 @@ app.post("/api/me/bots/:botId", auth, async (req, res) => {
   if (req.body?.visible !== undefined) bot.visible = !!req.body.visible;
   if (req.body?.username) bot.username = String(req.body.username).trim().toLowerCase();
   if (req.body?.token) bot.token = String(req.body.token).trim();
+  if (req.body?.proxy !== undefined) bot.proxy = String(req.body.proxy).trim();
+  if (req.body?.channels !== undefined) bot.channels = normChannels(req.body.channels);
   await save();
   res.json({ ok: true, bot: ownBot(bot) });
 });

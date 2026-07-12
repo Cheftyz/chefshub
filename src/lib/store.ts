@@ -109,6 +109,9 @@ interface State {
   removeAccount: (id: string) => Promise<void>;
   toggleVisible: (id: string) => Promise<void>;
   setActiveAccount: (id: string) => void;
+  setAccountProxy: (id: string, proxy: string) => Promise<void>;
+  /** connect an account to channels (it will view/read exactly these) */
+  connectAccountChannels: (id: string, names: string[]) => Promise<{ ok: boolean; error?: string }>;
 
   // channels
   addChannel: (platform: Platform, name: string) => Promise<void>;
@@ -405,6 +408,42 @@ export const useStore = create<State>()(
         await updateMyBot(id, { visible: next });
       },
       setActiveAccount: (id) => set({ activeAccountId: id }),
+
+      setAccountProxy: async (id, proxy) => {
+        set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, proxy } : a)) }));
+        chat.sync(get().accounts, get().channels);
+        await updateMyBot(id, { proxy });
+      },
+
+      connectAccountChannels: async (id, rawNames) => {
+        const acc = get().accounts.find((a) => a.id === id);
+        if (!acc) return { ok: false, error: "account not found" };
+        const names = Array.from(
+          new Set(rawNames.map((n) => n.toLowerCase().replace(/^#/, "").trim()).filter(Boolean))
+        ).slice(0, 50);
+        // make sure each connected channel exists so it's viewable + routed
+        for (const nm of names) {
+          const cid = channelId(acc.platform, nm);
+          if (get().channels.some((c) => c.id === cid)) continue;
+          let channel: Channel = { id: cid, platform: acc.platform, name: nm };
+          if (acc.platform === "kick") {
+            try {
+              const info = await resolveKickChannel(nm);
+              channel = { ...channel, kickChatroomId: info.chatroomId, kickBroadcasterId: info.broadcasterUserId };
+            } catch (e) {
+              return { ok: false, error: `Couldn't connect kick.com/${nm}: ${(e as Error).message}` };
+            }
+          }
+          set((s) => ({
+            channels: [...s.channels, channel],
+            messages: { ...s.messages, [cid]: s.messages[cid] ?? [] },
+          }));
+        }
+        set((s) => ({ accounts: s.accounts.map((a) => (a.id === id ? { ...a, channels: names } : a)) }));
+        chat.sync(get().accounts, get().channels);
+        await updateMyBot(id, { channels: names });
+        return { ok: true };
+      },
 
       addChannel: async (platform, name) => {
         const nm = name.trim().toLowerCase().replace(/^#/, "");

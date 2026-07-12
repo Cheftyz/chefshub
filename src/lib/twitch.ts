@@ -190,6 +190,13 @@ export class TwitchConnection {
     if (this.state === "open") this.ws?.send(`PART #${ch}`);
   }
 
+  /** Reconcile to exactly `desired`: part channels no longer wanted, join new ones. */
+  syncChannels(desired: string[]) {
+    const want = new Set(desired.map((c) => c.toLowerCase().replace(/^#/, "")));
+    for (const ch of Array.from(this.channels)) if (!want.has(ch)) this.part(ch);
+    for (const ch of want) this.join(ch);
+  }
+
   say(channel: string, text: string): boolean {
     const ch = channel.toLowerCase().replace(/^#/, "");
     if (this.state !== "open" || !this.ws) return false;

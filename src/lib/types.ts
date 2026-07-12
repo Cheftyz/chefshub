@@ -13,6 +13,12 @@ export interface Account {
   visible: boolean;
   /** optional per-bot proxy (used for Kick server-side sends) */
   proxy?: string;
+  /**
+   * Channel names (lowercase, no #) this account is connected to and views.
+   * When set, the account joins/reads only these; when empty it falls back to
+   * every channel that's been added.
+   */
+  channels?: string[];
 }
 
 export interface Channel {

@@ -228,9 +228,10 @@ function UserDialog({ editing, onClose, onSaved }: { editing: Editing; onClose: 
   );
 }
 
+type AdminTab = "users" | "bots" | "accounts" | "ai";
 export function AdminPanel() {
-  const [tab, setTab] = useState<"users" | "bots" | "ai">("users");
-  const tabBtn = (id: "users" | "bots" | "ai", labelText: string) => (
+  const [tab, setTab] = useState<AdminTab>("users");
+  const tabBtn = (id: AdminTab, labelText: string) => (
     <button
       onClick={() => setTab(id)}
       className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium ${
@@ -246,11 +247,236 @@ export function AdminPanel() {
         <div className="mb-5 flex items-center gap-1 rounded-xl border border-white/5 bg-white/[0.02] p-1">
           {tabBtn("users", "User accounts")}
           {tabBtn("bots", "All bots")}
+          {tabBtn("accounts", "Accounts")}
           {tabBtn("ai", "MB Chatters AI")}
         </div>
-        {tab === "users" ? <UsersPanel /> : tab === "bots" ? <AllBotsPanel /> : <AiPanel />}
+        {tab === "users" ? (
+          <UsersPanel />
+        ) : tab === "bots" ? (
+          <AllBotsPanel />
+        ) : tab === "accounts" ? (
+          <AccountsPanel />
+        ) : (
+          <AiPanel />
+        )}
       </div>
     </div>
+  );
+}
+
+// Your own accounts: add them, set a proxy each, and connect each to channels
+// it should view (join + read chat). Accounts with no channels fall back to
+// reading every channel you've added.
+function AccountsPanel() {
+  const accounts = useStore((s) => s.accounts);
+  const addAccount = useStore((s) => s.addAccount);
+  const removeAccount = useStore((s) => s.removeAccount);
+  const setAccountProxy = useStore((s) => s.setAccountProxy);
+  const connectAccountChannels = useStore((s) => s.connectAccountChannels);
+
+  const [proxies, setProxies] = useState<Record<string, string>>({});
+  const [chanInput, setChanInput] = useState<Record<string, string>>({});
+  const [rowErr, setRowErr] = useState<Record<string, string>>({});
+  const [savingProxy, setSavingProxy] = useState<string | null>(null);
+  const [busyRow, setBusyRow] = useState<string | null>(null);
+
+  const [platform, setPlatform] = useState<Platform>("twitch");
+  const [username, setUsername] = useState("");
+  const [tok, setTok] = useState("");
+  const [addBusy, setAddBusy] = useState(false);
+  const [addErr, setAddErr] = useState<string | null>(null);
+
+  // seed proxy inputs from accounts
+  useEffect(() => {
+    setProxies((p) => {
+      const next = { ...p };
+      for (const a of accounts) if (next[a.id] === undefined) next[a.id] = a.proxy || "";
+      return next;
+    });
+  }, [accounts]);
+
+  const saveProxy = async (id: string) => {
+    setSavingProxy(id);
+    await setAccountProxy(id, (proxies[id] || "").trim());
+    setSavingProxy(null);
+  };
+
+  const setChannels = async (id: string, names: string[]) => {
+    setBusyRow(id);
+    const r = await connectAccountChannels(id, names);
+    setBusyRow(null);
+    setRowErr((e) => ({ ...e, [id]: r.ok ? "" : r.error || "Couldn't connect channel." }));
+  };
+  const addChannel = (a: (typeof accounts)[number]) => {
+    const nm = (chanInput[a.id] || "").trim();
+    if (!nm) return;
+    setChanInput((c) => ({ ...c, [a.id]: "" }));
+    setChannels(a.id, [...(a.channels || []), nm]);
+  };
+  const removeChannel = (a: (typeof accounts)[number], nm: string) =>
+    setChannels(a.id, (a.channels || []).filter((c) => c !== nm));
+
+  const addAcc = async () => {
+    if (!username.trim() || !tok.trim() || addBusy) return;
+    setAddBusy(true);
+    setAddErr(null);
+    const r = await addAccount(platform, username, tok);
+    setAddBusy(false);
+    if (r.ok) {
+      setUsername("");
+      setTok("");
+    } else setAddErr(r.error || "Couldn't add account.");
+  };
+
+  return (
+    <>
+      <h1 className="text-lg font-semibold text-slate-100">Accounts</h1>
+      <p className="mb-5 mt-0.5 text-[13px] text-muted">
+        Your Twitch/Kick accounts. Give each a proxy and connect it to one or more channels — it will join and view
+        chat in exactly those. Connect no channels and it reads every channel you've added.
+      </p>
+
+      {accounts.length === 0 ? (
+        <p className="rounded-xl border border-white/10 bg-black/20 py-10 text-center text-sm text-muted">
+          No accounts yet. Add one below.
+        </p>
+      ) : (
+        <div className="mb-5 overflow-hidden rounded-xl border border-white/10 bg-black/20 backdrop-blur-2xl">
+          <table className="w-full text-sm">
+            <thead className="bg-white/[0.03] text-[11px] uppercase tracking-wider text-muted">
+              <tr>
+                <th className="px-4 py-2.5 text-left font-semibold">Account</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Proxy</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Views channels</th>
+                <th className="px-4 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {accounts.map((a) => {
+                const dirty = (proxies[a.id] || "") !== (a.proxy || "");
+                return (
+                  <tr key={a.id} className="border-t border-line align-top">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <PlatformBadge platform={a.platform} />
+                        <span className="font-medium text-slate-200">{a.username}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          className="w-44 rounded-lg border border-line bg-bg-soft px-2.5 py-1.5 font-mono text-[12px] text-slate-100 outline-none focus:border-brand/60"
+                          placeholder="http://user:pass@host:port"
+                          value={proxies[a.id] ?? ""}
+                          onChange={(e) => setProxies((p) => ({ ...p, [a.id]: e.target.value }))}
+                          onKeyDown={(e) => e.key === "Enter" && saveProxy(a.id)}
+                        />
+                        <button
+                          onClick={() => saveProxy(a.id)}
+                          disabled={!dirty || savingProxy === a.id}
+                          className="rounded-md bg-brand px-2.5 py-1.5 text-[12px] font-semibold text-brand-ink hover:bg-brand/90 disabled:opacity-40"
+                        >
+                          {savingProxy === a.id ? "…" : "Save"}
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {(a.channels || []).map((c) => (
+                          <span
+                            key={c}
+                            className="inline-flex items-center gap-1 rounded-md border border-brand/30 bg-brand/10 px-2 py-0.5 text-[12px] text-brand-soft"
+                          >
+                            {c}
+                            <button
+                              onClick={() => removeChannel(a, c)}
+                              className="text-brand-soft/70 hover:text-red-400"
+                              title="Disconnect"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                        {(a.channels || []).length === 0 && (
+                          <span className="text-[12px] italic text-muted/70">all channels</span>
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <input
+                          className="w-40 rounded-lg border border-line bg-bg-soft px-2.5 py-1.5 text-[12px] text-slate-100 outline-none focus:border-brand/60"
+                          placeholder={`${a.platform} channel`}
+                          value={chanInput[a.id] ?? ""}
+                          onChange={(e) => setChanInput((c) => ({ ...c, [a.id]: e.target.value }))}
+                          onKeyDown={(e) => e.key === "Enter" && addChannel(a)}
+                        />
+                        <button
+                          onClick={() => addChannel(a)}
+                          disabled={busyRow === a.id || !(chanInput[a.id] || "").trim()}
+                          className="flex items-center gap-1 rounded-md border border-line px-2 py-1.5 text-[12px] text-muted hover:border-brand/50 hover:text-slate-200 disabled:opacity-40"
+                        >
+                          {busyRow === a.id ? <IcSpinner width={12} height={12} /> : <IcPlus width={12} height={12} />}
+                          Connect
+                        </button>
+                      </div>
+                      {rowErr[a.id] && <p className="mt-1 text-[11px] text-red-400">{rowErr[a.id]}</p>}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => removeAccount(a.id)}
+                        title="Delete account"
+                        className="rounded-md border border-line p-1.5 text-muted hover:border-red-500/40 hover:text-red-400"
+                      >
+                        <IcTrash width={14} height={14} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-line bg-bg-soft/50 p-4">
+        <label className={label}>Add an account</label>
+        <div className="mb-2 flex gap-2">
+          {(Object.keys(PLATFORMS) as Platform[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPlatform(p)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-[12px] font-medium ${
+                platform === p ? "border-brand/70 bg-brand/10 text-slate-100" : "border-line text-muted"
+              }`}
+            >
+              <PlatformBadge platform={p} /> {PLATFORMS[p].label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <input
+            className={input}
+            placeholder="account username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <input
+            className={`${input} font-mono`}
+            placeholder={platform === "kick" ? "bearer token" : "oauth:token"}
+            value={tok}
+            onChange={(e) => setTok(e.target.value)}
+          />
+        </div>
+        {addErr && <p className="mt-2 text-[12px] text-red-400">{addErr}</p>}
+        <button
+          onClick={addAcc}
+          disabled={addBusy || !username.trim() || !tok.trim()}
+          className={`${btnPrimary} mt-3`}
+        >
+          {addBusy ? <IcSpinner width={14} height={14} /> : <IcPlus width={14} height={14} />} Add account
+        </button>
+      </div>
+    </>
   );
 }
 
