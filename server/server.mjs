@@ -13,6 +13,7 @@ import { sendResetCode, mailerConfigured } from "./mailer.mjs";
 import { resolveChannel, sendMessage } from "./kick.mjs";
 import { twitchLive, kickLive } from "./live.mjs";
 import { twitchSend } from "./twitch-send.mjs";
+import { generateReply } from "./ai.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(here, "..");
@@ -453,6 +454,82 @@ app.post("/api/twitch/send", auth, (req, res) => {
     proxy: bot.proxy || "",
     channel,
     text,
+  });
+  res.json(r);
+});
+
+// -------------------- MB Chatters AI (admin only) --------------------
+// A single, clearly-labeled AI bot that adapts to real viewers. Config + the
+// LLM key are stored server-side (key never leaves the server). Admin-only.
+function ensureAi() {
+  const d = db();
+  if (!d.ai)
+    d.ai = {
+      enabled: false,
+      provider: "anthropic",
+      apiKey: "",
+      model: "claude-opus-4-8",
+      persona: "",
+      botId: "",
+      channelId: "",
+      cooldownSec: 45,
+      maxReplyChars: 200,
+    };
+  return d.ai;
+}
+const publicAi = (a) => ({
+  enabled: !!a.enabled,
+  provider: a.provider === "openai" ? "openai" : "anthropic",
+  model: a.model || "claude-opus-4-8",
+  persona: a.persona || "",
+  botId: a.botId || "",
+  channelId: a.channelId || "",
+  cooldownSec: a.cooldownSec ?? 45,
+  maxReplyChars: a.maxReplyChars ?? 200,
+  hasKey: !!a.apiKey, // never return the key itself
+});
+
+app.get("/api/admin/ai", auth, adminOnly, (_req, res) => res.json({ ai: publicAi(ensureAi()) }));
+app.post("/api/admin/ai", auth, adminOnly, async (req, res) => {
+  const a = ensureAi();
+  const b = req.body || {};
+  if (b.enabled !== undefined) a.enabled = !!b.enabled;
+  if (b.provider !== undefined) a.provider = b.provider === "openai" ? "openai" : "anthropic";
+  if (b.model !== undefined) a.model = String(b.model).trim();
+  if (b.persona !== undefined) a.persona = String(b.persona).slice(0, 4000);
+  if (b.botId !== undefined) a.botId = String(b.botId);
+  if (b.channelId !== undefined) a.channelId = String(b.channelId);
+  if (b.cooldownSec !== undefined) a.cooldownSec = Math.max(5, Number(b.cooldownSec) || 45);
+  if (b.maxReplyChars !== undefined) a.maxReplyChars = Math.min(480, Math.max(40, Number(b.maxReplyChars) || 200));
+  if (b.clearKey) a.apiKey = "";
+  else if (b.apiKey) a.apiKey = String(b.apiKey).trim(); // only overwrite when a new key is sent
+  await save();
+  res.json({ ok: true, ai: publicAi(a) });
+});
+// Generate one reply from recent chat context. The browser sends the context;
+// the server holds the key and calls the LLM.
+app.post("/api/admin/ai/reply", auth, adminOnly, async (req, res) => {
+  const a = ensureAi();
+  if (!a.enabled) return res.json({ ok: false, error: "disabled" });
+  if (!a.apiKey) return res.json({ ok: false, error: "no API key set" });
+  const bot = ensureBots(req.user).find((x) => x.id === a.botId);
+  const botName = bot?.username || "MB Chatters";
+  const context = Array.isArray(req.body?.context)
+    ? req.body.context
+        .slice(-14)
+        .map((m) => ({ username: String(m?.username || "user").slice(0, 40), text: String(m?.text || "").slice(0, 300) }))
+        .filter((m) => m.text)
+    : [];
+  if (!context.length) return res.json({ ok: false, error: "no context" });
+  const r = await generateReply({
+    provider: a.provider,
+    apiKey: a.apiKey,
+    model: a.model,
+    persona: a.persona,
+    botName,
+    channel: (a.channelId || "").split(":")[1] || "the stream",
+    context,
+    maxChars: a.maxReplyChars,
   });
   res.json(r);
 });

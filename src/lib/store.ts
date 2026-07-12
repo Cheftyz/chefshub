@@ -23,10 +23,14 @@ import { resolveKickChannel } from "./kick";
 import { listMyBots, addMyBot, updateMyBot, deleteMyBot } from "./bots";
 import { listGroups, saveGroups } from "./groups";
 import { listItems, addItem, updateItem, deleteItem } from "./tools";
+import { getAiConfig, aiReply, type AiConfig } from "./ai";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const cmdCooldown = new Map<string, number>();
 const timerLastRun = new Map<string, number>();
+// MB Chatters AI throttle (single bot, one reply in flight, cooldown between replies)
+let aiLastRun = 0;
+let aiInFlight = false;
 
 const NAME_COLORS = [
   "#ff4a80", "#8b5cf6", "#22c55e", "#f59e0b", "#38bdf8",
@@ -68,6 +72,12 @@ interface State {
   quotes: Quote[];
   giveaway: GiveawayState;
   activity: ActivityEvent[];
+
+  // MB Chatters AI (admin-only single labeled bot)
+  ai: AiConfig | null;
+  loadAi: () => Promise<void>;
+  setAi: (cfg: AiConfig | null) => void;
+  clearAi: () => void;
 
   // navigation
   setView: (platform: Platform) => void;
@@ -168,6 +178,11 @@ export const useStore = create<State>()(
       quotes: [],
       giveaway: { active: false, keyword: "", channelId: null, entrants: [], winner: null },
       activity: [],
+      ai: null,
+
+      loadAi: async () => set({ ai: await getAiConfig() }),
+      setAi: (cfg) => set({ ai: cfg }),
+      clearAi: () => set({ ai: null }),
 
       setPage: (p) => set({ page: p }),
 
@@ -242,6 +257,54 @@ export const useStore = create<State>()(
       handleIncoming: (cId, username, text) => {
         const t = text.trim();
         const low = t.toLowerCase();
+
+        // MB Chatters AI — one labeled bot that adapts to real viewers.
+        // Fires on real chat in its target channel, throttled by a cooldown,
+        // at most one reply in flight. The LLM key stays on the server.
+        const ai = get().ai;
+        if (ai && ai.enabled && ai.hasKey && ai.channelId === cId && !aiInFlight) {
+          const now = Date.now();
+          if (now - aiLastRun >= Math.max(5, ai.cooldownSec || 45) * 1000) {
+            aiInFlight = true;
+            aiLastRun = now; // reserve the slot up-front so we don't stack requests
+            const context = (get().messages[cId] ?? [])
+              .filter((m) => !m.system)
+              .slice(-12)
+              .map((m) => ({ username: m.displayName || m.username || "user", text: m.text }));
+            context.push({ username, text: t });
+            aiReply(context)
+              .then((r) => {
+                if (r.ok && r.reply && !r.skip) {
+                  const acc = get().accounts.find((a) => a.id === ai.botId);
+                  const channel = get().channels.find((c) => c.id === cId);
+                  if (acc && channel && acc.platform === channel.platform) {
+                    chat.send(acc, channel, r.reply);
+                    get().pushMessage({
+                      id: uid(),
+                      channelId: cId,
+                      username: acc.username,
+                      displayName: acc.username,
+                      color: colorFor(acc.username),
+                      text: r.reply,
+                      ts: Date.now(),
+                      self: true,
+                    });
+                    get().pushActivity("system", `MB Chatters AI replied: ${r.reply.slice(0, 60)}`);
+                  }
+                } else if (!r.ok) {
+                  aiLastRun = 0; // let it retry on the next message
+                  if (r.error && r.error !== "no context") get().pushActivity("system", `MB Chatters AI: ${r.error}`);
+                }
+              })
+              .catch(() => {
+                aiLastRun = 0;
+              })
+              .finally(() => {
+                aiInFlight = false;
+              });
+          }
+        }
+
         // giveaway entry
         const g = get().giveaway;
         if (g.active && g.channelId === cId && low === g.keyword.trim().toLowerCase()) {

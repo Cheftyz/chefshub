@@ -38,20 +38,26 @@ export default function App() {
   const clearGroups = useStore((s) => s.clearGroups);
   const loadTools = useStore((s) => s.loadTools);
   const clearTools = useStore((s) => s.clearTools);
+  const loadAi = useStore((s) => s.loadAi);
+  const clearAi = useStore((s) => s.clearAi);
 
   // load this user's server data once signed in
   const userId = useAuth((s) => s.user?.id ?? null);
+  const isAdmin = useAuth((s) => s.user?.isAdmin ?? false);
   useEffect(() => {
     if (userId) {
       loadBots();
       loadGroups();
       loadTools();
+      if (isAdmin) loadAi();
+      else clearAi();
     } else {
       clearBots();
       clearGroups();
       clearTools();
+      clearAi();
     }
-  }, [userId, loadBots, clearBots, loadGroups, clearGroups, loadTools, clearTools]);
+  }, [userId, isAdmin, loadBots, clearBots, loadGroups, clearGroups, loadTools, clearTools, loadAi, clearAi]);
 
   useEffect(() => {
     chat.sync(accounts, channels);

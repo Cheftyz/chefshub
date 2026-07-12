@@ -19,7 +19,9 @@ import {
 import { Modal } from "./Modal";
 import { PLATFORMS, PlatformBadge } from "./platform";
 import type { Platform } from "../lib/types";
-import { IcSpinner, IcPlus, IcEdit, IcTrash } from "./Icons";
+import { IcSpinner, IcPlus, IcEdit, IcTrash, IcSparkle } from "./Icons";
+import { useStore } from "../lib/store";
+import { saveAiConfig, type AiConfig } from "../lib/ai";
 
 const STATUS_STYLE: Record<string, string> = {
   approved: "bg-emerald-500/15 text-emerald-400",
@@ -227,31 +229,278 @@ function UserDialog({ editing, onClose, onSaved }: { editing: Editing; onClose: 
 }
 
 export function AdminPanel() {
-  const [tab, setTab] = useState<"users" | "bots">("users");
+  const [tab, setTab] = useState<"users" | "bots" | "ai">("users");
+  const tabBtn = (id: "users" | "bots" | "ai", labelText: string) => (
+    <button
+      onClick={() => setTab(id)}
+      className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium ${
+        tab === id ? "bg-white/[0.06] text-slate-100" : "text-muted hover:text-slate-200"
+      }`}
+    >
+      {labelText}
+    </button>
+  );
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6 scrollbar-thin">
       <div className="mx-auto max-w-4xl">
         <div className="mb-5 flex items-center gap-1 rounded-xl border border-white/5 bg-white/[0.02] p-1">
-          <button
-            onClick={() => setTab("users")}
-            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium ${
-              tab === "users" ? "bg-white/[0.06] text-slate-100" : "text-muted hover:text-slate-200"
-            }`}
-          >
-            User accounts
-          </button>
-          <button
-            onClick={() => setTab("bots")}
-            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium ${
-              tab === "bots" ? "bg-white/[0.06] text-slate-100" : "text-muted hover:text-slate-200"
-            }`}
-          >
-            All bots
-          </button>
+          {tabBtn("users", "User accounts")}
+          {tabBtn("bots", "All bots")}
+          {tabBtn("ai", "MB Chatters AI")}
         </div>
-        {tab === "users" ? <UsersPanel /> : <AllBotsPanel />}
+        {tab === "users" ? <UsersPanel /> : tab === "bots" ? <AllBotsPanel /> : <AiPanel />}
       </div>
     </div>
+  );
+}
+
+function AiPanel() {
+  const ai = useStore((s) => s.ai);
+  const setAi = useStore((s) => s.setAi);
+  const accounts = useStore((s) => s.accounts);
+  const channels = useStore((s) => s.channels);
+
+  const [enabled, setEnabled] = useState(false);
+  const [provider, setProvider] = useState<"anthropic" | "openai">("anthropic");
+  const [model, setModel] = useState("claude-opus-4-8");
+  const [persona, setPersona] = useState("");
+  const [botId, setBotId] = useState("");
+  const [channelId, setChannelId] = useState("");
+  const [cooldownSec, setCooldownSec] = useState(45);
+  const [maxReplyChars, setMaxReplyChars] = useState(200);
+  const [apiKey, setApiKey] = useState("");
+  const [hasKey, setHasKey] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // hydrate the form from the loaded config
+  useEffect(() => {
+    if (!ai) return;
+    setEnabled(ai.enabled);
+    setProvider(ai.provider);
+    setModel(ai.model);
+    setPersona(ai.persona);
+    setBotId(ai.botId);
+    setChannelId(ai.channelId);
+    setCooldownSec(ai.cooldownSec);
+    setMaxReplyChars(ai.maxReplyChars);
+    setHasKey(ai.hasKey);
+  }, [ai]);
+
+  const save = async (overrides?: Partial<AiConfig>) => {
+    setBusy(true);
+    setSaved(false);
+    const patch = {
+      enabled,
+      provider,
+      model: model.trim() || "claude-opus-4-8",
+      persona,
+      botId,
+      channelId,
+      cooldownSec,
+      maxReplyChars,
+      ...overrides,
+      ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
+    };
+    const next = await saveAiConfig(patch);
+    setBusy(false);
+    if (next) {
+      setAi(next); // the chat engine reads config from the store
+      setHasKey(next.hasKey);
+      setApiKey("");
+      setEnabled(next.enabled);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
+  };
+
+  const toggleEnabled = async () => {
+    const next = !enabled;
+    setEnabled(next);
+    await save({ enabled: next });
+  };
+
+  const clearKey = async () => {
+    setApiKey("");
+    await saveAiConfig({ clearKey: true }).then((n) => {
+      if (n) {
+        setAi(n);
+        setHasKey(false);
+      }
+    });
+  };
+
+  const platformOf = channels.find((c) => c.id === channelId)?.platform;
+  const botOptions = accounts;
+  const providerHint =
+    provider === "anthropic"
+      ? "Anthropic API key (starts with sk-ant-…). Model e.g. claude-opus-4-8 or claude-haiku-4-5."
+      : "OpenAI API key (starts with sk-…). Model e.g. gpt-4o-mini.";
+
+  return (
+    <>
+      <div className="mb-1 flex items-center gap-2">
+        <span className="text-brand">
+          <IcSparkle width={18} height={18} />
+        </span>
+        <h1 className="text-lg font-semibold text-slate-100">MB Chatters AI</h1>
+        <span
+          className={`ml-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+            enabled ? "bg-emerald-500/15 text-emerald-400" : "bg-white/5 text-muted"
+          }`}
+        >
+          {enabled ? "On" : "Off"}
+        </span>
+        <button
+          onClick={toggleEnabled}
+          disabled={busy}
+          className={`ml-auto rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-40 ${
+            enabled
+              ? "border border-line text-muted hover:border-red-500/40 hover:text-red-400"
+              : "bg-brand text-brand-ink hover:bg-brand/90"
+          }`}
+        >
+          {enabled ? "Turn off" : "Turn on"}
+        </button>
+      </div>
+      <p className="mb-5 text-[13px] text-muted">
+        One clearly-labeled AI bot that reads your chat and replies to real viewers in real time. It posts from a single
+        account you pick, on your own channel. Your LLM key is stored on the server and never sent to the browser.
+      </p>
+
+      <div className="space-y-4 rounded-2xl border border-white/10 bg-black/20 p-5 backdrop-blur-2xl">
+        <div>
+          <label className={label}>Provider</label>
+          <div className="flex gap-2">
+            {(["anthropic", "openai"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => {
+                  setProvider(p);
+                  if (p === "anthropic" && !/claude/.test(model)) setModel("claude-opus-4-8");
+                  if (p === "openai" && /claude/.test(model)) setModel("gpt-4o-mini");
+                }}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize ${
+                  provider === p ? "border-brand/70 bg-brand/10 text-slate-100" : "border-line text-muted"
+                }`}
+              >
+                {p === "anthropic" ? "Anthropic (Claude)" : "OpenAI"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={label}>Model</label>
+            <input className={input} value={model} onChange={(e) => setModel(e.target.value)} />
+          </div>
+          <div>
+            <label className={label}>API key</label>
+            {hasKey && !apiKey ? (
+              <div className="flex items-center gap-2">
+                <span className="flex-1 rounded-lg border border-line bg-bg-soft px-3 py-2 text-sm text-emerald-400">
+                  Key saved ✓
+                </span>
+                <button
+                  onClick={clearKey}
+                  className="rounded-lg border border-line px-3 py-2 text-[12px] text-muted hover:border-red-500/40 hover:text-red-400"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <input
+                className={`${input} font-mono`}
+                type="password"
+                placeholder={provider === "anthropic" ? "sk-ant-…" : "sk-…"}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+            )}
+          </div>
+        </div>
+        <p className="-mt-2 text-[12px] text-muted">{providerHint}</p>
+
+        <div>
+          <label className={label}>Persona / what it talks about</label>
+          <textarea
+            className={`${input} h-24 resize-y`}
+            placeholder="e.g. A hype-but-chill co-host for my Just Chatting stream. Keep it light, joke around, ask viewers questions."
+            value={persona}
+            onChange={(e) => setPersona(e.target.value)}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={label}>Posts from account</label>
+            <select className={input} value={botId} onChange={(e) => setBotId(e.target.value)}>
+              <option value="">— pick a bot account —</option>
+              {botOptions.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.platform} · {a.username}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={label}>Replies in channel</label>
+            <select className={input} value={channelId} onChange={(e) => setChannelId(e.target.value)}>
+              <option value="">— pick a channel —</option>
+              {channels.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.platform} · {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {botId && platformOf && accounts.find((a) => a.id === botId)?.platform !== platformOf && (
+          <p className="-mt-2 text-[12px] text-amber-400">
+            The bot account and channel are on different platforms — pick a matching pair so it can post.
+          </p>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={label}>Cooldown between replies (seconds)</label>
+            <input
+              className={input}
+              type="number"
+              min={5}
+              value={cooldownSec}
+              onChange={(e) => setCooldownSec(Math.max(5, Number(e.target.value) || 45))}
+            />
+          </div>
+          <div>
+            <label className={label}>Max reply length (characters)</label>
+            <input
+              className={input}
+              type="number"
+              min={40}
+              max={480}
+              value={maxReplyChars}
+              onChange={(e) => setMaxReplyChars(Math.min(480, Math.max(40, Number(e.target.value) || 200)))}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 pt-1">
+          <button className={btnPrimary} onClick={() => save()} disabled={busy}>
+            {busy && <IcSpinner width={15} height={15} />}
+            Save settings
+          </button>
+          {saved && <span className="text-[13px] text-emerald-400">Saved ✓</span>}
+        </div>
+      </div>
+
+      <p className="mt-4 text-[12px] leading-relaxed text-muted/80">
+        Make sure the app is connected to the chosen channel (add it under Channels) so the bot can see chat. It only
+        replies to real viewers — it doesn't talk to itself or to other bots.
+      </p>
+    </>
   );
 }
 
