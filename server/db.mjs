@@ -38,7 +38,18 @@ export async function initDb() {
   const url = process.env.DATABASE_URL;
   if (url) {
     const pg = (await import("pg")).default;
-    pool = new pg.Pool({ connectionString: url, ssl: sslOption(url) });
+    pool = new pg.Pool({
+      connectionString: url,
+      ssl: sslOption(url),
+      // never wait forever on an unreachable/suspended database — a hang here
+      // used to stop the server from ever binding its port.
+      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 30000,
+      max: 5,
+    });
+    // idle clients can emit errors (e.g. the DB going to sleep); swallow them
+    // so they don't take the whole process down.
+    pool.on("error", (e) => console.error("[MB Chatters] postgres pool error:", e.message));
     await pool.query("CREATE TABLE IF NOT EXISTS kv (k text PRIMARY KEY, v jsonb NOT NULL)");
     const r = await pool.query("SELECT v FROM kv WHERE k = 'db'");
     if (r.rows.length) {

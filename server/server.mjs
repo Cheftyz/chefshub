@@ -63,6 +63,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Startup state. The server binds its port immediately and connects to the
+// database in the background, so a slow or unreachable DB can never stop the
+// site from loading (it used to hang forever before app.listen).
+const dbState = { ready: false, error: null };
+
+app.use("/api", (req, res, next) => {
+  if (dbState.ready || req.path === "/health") return next();
+  res.status(503).json({
+    error: "starting up",
+    detail: dbState.error || "connecting to the database",
+  });
+});
+
 const publicUser = (u) => ({
   id: u.id,
   email: u.email,
@@ -340,6 +353,7 @@ app.get("/api/admin/bots", auth, adminOnly, (_req, res) => {
         username: b.username,
         visible: b.visible !== false,
         proxy: b.proxy || "",
+        channels: Array.isArray(b.channels) ? b.channels : [],
         ownerId: u.id,
         ownerName: u.displayName || u.email,
         ownerEmail: u.email,
@@ -354,6 +368,7 @@ app.post("/api/admin/bots/:botId", auth, adminOnly, async (req, res) => {
   if (!found) return res.status(404).json({ error: "bot not found" });
   if (req.body?.proxy !== undefined) found.bot.proxy = String(req.body.proxy).trim();
   if (req.body?.visible !== undefined) found.bot.visible = !!req.body.visible;
+  if (req.body?.channels !== undefined) found.bot.channels = normChannels(req.body.channels);
   await save();
   res.json({ ok: true });
 });
@@ -550,7 +565,13 @@ app.get("/api/live/twitch/:login", auth, async (req, res) => res.json(await twit
 app.get("/api/live/kick/:slug", auth, async (req, res) => res.json(await kickLive(req.params.slug)));
 
 app.get("/api/health", (_req, res) =>
-  res.json({ ok: true, storage: storageKind(), mailer: mailerConfigured ? "smtp" : "console" })
+  res.json({
+    ok: dbState.ready,
+    db: dbState.ready ? "ready" : "unavailable",
+    error: dbState.error,
+    storage: storageKind(),
+    mailer: mailerConfigured ? "smtp" : "console",
+  })
 );
 
 // ---------------------------- static frontend ----------------------------
@@ -564,15 +585,35 @@ if (fs.existsSync(DIST)) {
   console.warn("[MB Chatters] dist/ not found — run `npm run build` to serve the app. API still works.");
 }
 
-async function main() {
-  await initDb();
-  await seedAdmin();
+// Connect to the database in the background, retrying with backoff so the site
+// heals itself when a suspended DB (e.g. Neon free tier) wakes back up.
+async function bootDb() {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await initDb();
+      await seedAdmin();
+      dbState.ready = true;
+      dbState.error = null;
+      console.log(`[MB Chatters] database ready (${storageKind()})`);
+      return;
+    } catch (e) {
+      dbState.ready = false;
+      dbState.error = e.message;
+      const wait = Math.min(30000, 2000 * attempt);
+      console.error(
+        `[MB Chatters] database init failed (attempt ${attempt}): ${e.message} — retrying in ${wait / 1000}s`
+      );
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+}
+
+function main() {
+  // bind the port FIRST so the site always answers, even if the DB is down
   app.listen(PORT, () => {
     console.log(`MB Chatters server on http://localhost:${PORT}  (mailer: ${mailerConfigured ? "SMTP" : "console"})`);
   });
+  bootDb();
 }
 
-main().catch((err) => {
-  console.error("[MB Chatters] failed to start:", err);
-  process.exit(1);
-});
+main();
