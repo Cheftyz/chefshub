@@ -12,6 +12,7 @@ import {
   adminDeleteBot,
   adminListAllBots,
   adminSetBotProxy,
+  adminSetBotChannels,
   adminDeleteBotGlobal,
   type AdminBot,
   type AdminGlobalBot,
@@ -308,10 +309,10 @@ function AccountsPanel() {
     setRowErr((e) => ({ ...e, [id]: r.ok ? "" : r.error || "Couldn't connect channel." }));
   };
   const addChannel = (a: (typeof accounts)[number]) => {
-    const nm = (chanInput[a.id] || "").trim();
-    if (!nm) return;
+    const names = (chanInput[a.id] || "").split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+    if (!names.length) return;
     setChanInput((c) => ({ ...c, [a.id]: "" }));
-    setChannels(a.id, [...(a.channels || []), nm]);
+    setChannels(a.id, [...(a.channels || []), ...names]);
   };
   const removeChannel = (a: (typeof accounts)[number], nm: string) =>
     setChannels(a.id, (a.channels || []).filter((c) => c !== nm));
@@ -403,8 +404,8 @@ function AccountsPanel() {
                       </div>
                       <div className="mt-1.5 flex items-center gap-1.5">
                         <input
-                          className="w-40 rounded-lg border border-line bg-bg-soft px-2.5 py-1.5 text-[12px] text-slate-100 outline-none focus:border-brand/60"
-                          placeholder={`${a.platform} channel`}
+                          className="w-52 rounded-lg border border-line bg-bg-soft px-2.5 py-1.5 text-[12px] text-slate-100 outline-none focus:border-brand/60"
+                          placeholder={`${a.platform} channels (comma-separated)`}
                           value={chanInput[a.id] ?? ""}
                           onChange={(e) => setChanInput((c) => ({ ...c, [a.id]: e.target.value }))}
                           onKeyDown={(e) => e.key === "Enter" && addChannel(a)}
@@ -900,18 +901,34 @@ function UsersPanel() {
 }
 
 function AllBotsPanel() {
+  const myId = useAuth((s) => s.user?.id);
+  const connectAccountChannels = useStore((s) => s.connectAccountChannels);
   const [bots, setBots] = useState<AdminGlobalBot[] | null>(null);
   const [proxies, setProxies] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkChan, setBulkChan] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState<string | null>(null);
 
   const load = async () => {
     const list = await adminListAllBots();
     setBots(list);
     setProxies(Object.fromEntries(list.map((b) => [b.id, b.proxy])));
+    setSelected((sel) => new Set(list.filter((b) => sel.has(b.id)).map((b) => b.id)));
   };
   useEffect(() => {
     load();
   }, []);
+
+  const toggleSel = (id: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  const allSelected = !!bots && bots.length > 0 && bots.every((b) => selected.has(b.id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set((bots || []).map((b) => b.id)));
 
   const saveProxy = async (b: AdminGlobalBot) => {
     setSavingId(b.id);
@@ -925,12 +942,62 @@ function AllBotsPanel() {
     await load();
   };
 
+  // connect every selected account to the given channel(s) at once (broadcast-style)
+  const bulkConnect = async () => {
+    const names = bulkChan
+      .split(/[\s,]+/)
+      .map((s) => s.trim().toLowerCase().replace(/^#/, ""))
+      .filter(Boolean);
+    if (!names.length || !selected.size || !bots) return;
+    setBulkBusy(true);
+    setBulkMsg(null);
+    let errs = 0;
+    for (const b of bots) {
+      if (!selected.has(b.id)) continue;
+      const merged = Array.from(new Set([...(b.channels || []), ...names]));
+      // my own accounts go live in this browser (join + view); others' persist for their next session
+      const r =
+        b.ownerId === myId
+          ? await connectAccountChannels(b.id, merged)
+          : await adminSetBotChannels(b.id, merged);
+      if (!r.ok) errs++;
+    }
+    setBulkBusy(false);
+    setBulkChan("");
+    setBulkMsg(errs ? `Done with ${errs} error(s).` : `Connected ${selected.size} account(s) to ${names.join(", ")}.`);
+    await load();
+  };
+
   return (
     <>
       <h1 className="text-lg font-semibold text-slate-100">All bots</h1>
-      <p className="mb-5 mt-0.5 text-[13px] text-muted">
-        Every Twitch/Kick bot on the site and whose account it's on. Set a proxy per bot (applied to Kick sends).
+      <p className="mb-4 mt-0.5 text-[13px] text-muted">
+        Every Twitch/Kick bot on the site and whose account it's on. Set a proxy per bot, or select accounts and connect
+        them all to a channel at once.
       </p>
+
+      {bots && bots.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/20 p-3">
+          <span className="text-[13px] font-medium text-slate-200">
+            {selected.size} account{selected.size === 1 ? "" : "s"} selected
+          </span>
+          <input
+            className="min-w-[200px] flex-1 rounded-lg border border-line bg-bg-soft px-3 py-1.5 text-[13px] text-slate-100 outline-none focus:border-brand/60"
+            placeholder="channel(s) to connect — comma-separated"
+            value={bulkChan}
+            onChange={(e) => setBulkChan(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && bulkConnect()}
+          />
+          <button
+            onClick={bulkConnect}
+            disabled={!selected.size || !bulkChan.trim() || bulkBusy}
+            className={btnPrimary}
+          >
+            {bulkBusy ? <IcSpinner width={14} height={14} /> : null} Connect to selected
+          </button>
+          {bulkMsg && <span className="w-full text-[12px] text-brand-soft">{bulkMsg}</span>}
+        </div>
+      )}
 
       {bots === null ? (
         <div className="flex items-center gap-2 py-10 text-muted">
@@ -943,8 +1010,18 @@ function AllBotsPanel() {
           <table className="w-full text-sm">
             <thead className="bg-white/[0.03] text-[11px] uppercase tracking-wider text-muted">
               <tr>
+                <th className="px-3 py-2.5 text-left">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="h-3.5 w-3.5 accent-[var(--brand,#22e06b)]"
+                    title="Select all"
+                  />
+                </th>
                 <th className="px-4 py-2.5 text-left font-semibold">Bot</th>
                 <th className="px-4 py-2.5 text-left font-semibold">On account</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Views</th>
                 <th className="px-4 py-2.5 text-left font-semibold">Proxy</th>
                 <th className="px-4 py-2.5"></th>
               </tr>
@@ -953,7 +1030,15 @@ function AllBotsPanel() {
               {bots.map((b) => {
                 const dirty = (proxies[b.id] || "") !== (b.proxy || "");
                 return (
-                  <tr key={b.id} className="border-t border-line">
+                  <tr key={b.id} className={`border-t border-line ${selected.has(b.id) ? "bg-brand/[0.06]" : ""}`}>
+                    <td className="px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(b.id)}
+                        onChange={() => toggleSel(b.id)}
+                        className="h-3.5 w-3.5 accent-[var(--brand,#22e06b)]"
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <PlatformBadge platform={b.platform} />
@@ -963,6 +1048,22 @@ function AllBotsPanel() {
                     <td className="px-4 py-3">
                       <div className="text-[13px] text-slate-200">{b.ownerName}</div>
                       <div className="text-[12px] text-muted">{b.ownerEmail}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {b.channels && b.channels.length ? (
+                        <div className="flex max-w-[180px] flex-wrap gap-1">
+                          {b.channels.map((c) => (
+                            <span
+                              key={c}
+                              className="rounded-md border border-brand/30 bg-brand/10 px-1.5 py-0.5 text-[11px] text-brand-soft"
+                            >
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[12px] italic text-muted/70">all channels</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">

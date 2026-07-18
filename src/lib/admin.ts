@@ -98,6 +98,7 @@ export interface AdminGlobalBot {
   username: string;
   visible: boolean;
   proxy: string;
+  channels: string[];
   ownerId: string;
   ownerName: string;
   ownerEmail: string;
@@ -112,6 +113,14 @@ export async function adminSetBotProxy(botId: string, proxy: string): Promise<{ 
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token()}` },
     body: JSON.stringify({ proxy }),
+  });
+  return r.json().catch(() => ({ ok: false }));
+}
+export async function adminSetBotChannels(botId: string, channels: string[]): Promise<{ ok: boolean }> {
+  const r = await fetch(`/api/admin/bots/${botId}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token()}` },
+    body: JSON.stringify({ channels }),
   });
   return r.json().catch(() => ({ ok: false }));
 }
